@@ -16,7 +16,7 @@ The report is produced in **two phases**:
 
 - **Python 3.8+**
 - **GitHub CLI (`gh`)** — authenticated with access to the target org
-- **Token scope**: `read:project` recommended for GitHub Projects v2 status enrichment (optional — falls back to activity-based detection)
+- **Token scope**: `read:project` is optional — it only enriches the epic Status column from the Projects v2 board. Active-epic detection is sub-issue-based and works without it.
 
 ## Quick Start
 
@@ -54,19 +54,19 @@ The script generates a baseline Active Epics table from `epic-tracker.py` output
 
 | Epic | Lead | Key Result | This Week |
 |------|------|------------|-----------|
-| [kagenti/kagenti#1789](https://github.com/kagenti/kagenti/issues/1789) OPA Authorization | @davidhadas | KR2: Zero-trust agent auth | 3 PRs merged |
-| [kagenti/kagenti-extensions#501](https://github.com/kagenti/kagenti-extensions/issues/501) Session Mgmt | @sahilsuneja1 | KR1: Stateful agent infra | 1 PR merged, design review |
+| [kagenti/kagenti#1789](https://github.com/kagenti/kagenti/issues/1789) OPA Authorization | @davidhadas | KR2: Zero-trust agent auth | 3 sub-issues closed, 4 open |
+| [kagenti/kagenti-extensions#501](https://github.com/kagenti/kagenti-extensions/issues/501) Session Mgmt | @sahilsuneja1 | KR1: Stateful agent infra | 2 open, 1 PR merged |
 
 Rules:
-- Scan for `epic` label across all repos in the org (not just kagenti/kagenti)
-- Show epics with Status = "In Progress" (from project board) or with activity this week
+- Scan for the `epic` label across all repos in the org
+- **Detection is sub-issue-based** (the primary signal): an epic is active if it has open sub-issues (backlog / in-progress) OR a sub-issue closed within the reporting window. This does not depend on the project board and needs no `read:project` scope. A merged-PR cross-reference in the window also counts.
+- Board Status (Projects v2), when available, is **display-only enrichment** — it fills the status label but never gates inclusion. Teams often park active epics in an "Epics" column rather than "In Progress", so board status alone misses them.
 - Lead = first assignee on the epic issue
 - Epic reference = full `org/repo#N` with link to the source repo
 - Key Result = extracted from epic body (`## Key Results` section) or inferred from title/labels
-- "This Week" = brief summary of PRs merged / issues closed referencing this epic
-- Cap at 10 epics; sort by activity count descending
-- If an epic has no activity this week but is "In Progress", still show it (with "no activity" note)
-- If the script produced a fallback-mode table (no Projects v2 access), note this but do not remove the section
+- "This Week" = brief summary of sub-issues closed / open, plus any PRs merged referencing this epic
+- Cap the list (configurable via `--max-epics`, default 10); sort by recent activity (sub-issues closed this week, then open count) descending to keep the section a focused planning input
+- If the script produced a fallback-mode table (no Projects v2 access), the status column is derived from sub-issue state — keep the section
 
 ### Cross-Repo Highlights
 

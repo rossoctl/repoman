@@ -17,7 +17,8 @@ Scan all repositories in a GitHub organization for broken links. Creates GitHub 
 ## Prerequisites
 
 - `bash` 4+ (macOS ships 3.2; use `brew install bash` for 4+)
-- `lychee` (link checker: `brew install lychee`)
+- `lychee` >= 0.23.0 (link checker: `brew install lychee`) — the scanner relies on
+  lychee's default exclusion of URLs inside code blocks; do not pass `--include-verbatim`
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 

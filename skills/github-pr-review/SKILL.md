@@ -16,6 +16,7 @@ flowchart TD
     ANALYZE --> REVIEW["Phase 3: Review"]:::github
     REVIEW --> DRAFT["Phase 4: Draft"]:::github
     DRAFT -->|User approves| SUBMIT["Phase 5: Submit"]:::github
+    DRAFT -->|Automated / skip §4.4| SUBMIT
     DRAFT -->|User edits| DRAFT
 
     classDef github fill:#E91E63,stroke:#333,color:white
@@ -498,9 +499,10 @@ Review submitted on PR #<number>: https://github.com/$OWNER/$REPO/pull/<number>
 
 ### Line numbers in diff vs file
 
-The `line` parameter in the review API refers to the line number in the **diff hunk**,
-not the file. Use the diff output to determine correct line numbers. The `line` field
-should be the line number in the file on the HEAD side of the diff.
+The `line` parameter in the review API refers to the **file line number on the HEAD
+side** of the diff. This differs from the legacy `position` parameter, which counts
+lines down from the first `@@` hunk header. Use `line` (as shown in §5.1) — not
+`position`.
 
 ### Review already exists
 

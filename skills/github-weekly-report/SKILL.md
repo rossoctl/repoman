@@ -27,12 +27,17 @@ python3 {baseDir}/scripts/report.py --org <org> --output report.md --json-output
 # Report on specific date range
 python3 {baseDir}/scripts/report.py --org <org> --since 2026-03-23 --until 2026-03-30 --output report.md --json-output report-data.json
 
+# Report on an explicit repo set (owner-qualified); skips org-wide discovery
+python3 {baseDir}/scripts/report.py --org <org> --repos <org>/repo-a <org>/repo-b --output report.md --json-output report-data.json
+
 # Run epic tracker standalone (for debugging)
 python3 {baseDir}/scripts/epic-tracker.py --org <org> --since 2026-03-23 --until 2026-03-30
 
 # Post report to a GitHub issue
 gh issue create -R <org>/<repo> --title "Weekly Report $(date +%Y-%m-%d)" --body-file report.md
 ```
+
+When `--repos` is omitted, the report discovers all repos in the org (the unchanged default). Automation deployments pass the curated core-repo allowlist via the `weekly-report.sh` wrapper, which resolves the list and calls `report.py --repos` for you.
 
 ## What the Report Includes
 

@@ -20,6 +20,13 @@ Monitor all repositories in a GitHub organization for open Dependabot PRs. Class
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo, read:org]
+- labels_required: []
+- labels_applied: []
+- programs: [scanner]
+
 ## Before Running
 
 ### 1. Verify authentication

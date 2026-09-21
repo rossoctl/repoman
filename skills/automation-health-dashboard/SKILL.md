@@ -19,6 +19,13 @@ Generate a unified executive-facing dashboard combining link-health and dep-bump
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo, read:org]
+- labels_required: []
+- labels_applied: []
+- programs: [dashboard]
+
 ## Before Running
 
 ### 1. Ensure program reports exist

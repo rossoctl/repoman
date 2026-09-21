@@ -20,6 +20,13 @@ Respond to scanner-created issues (`[dep-bump]` title prefix) with severity-appr
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo, read:org]
+- labels_required: []
+- labels_applied: []
+- programs: [fixer]
+
 ## Before Running
 
 ### 1. Verify authentication

@@ -36,6 +36,18 @@ comments, and posts a GitHub review after user approval.
 > not bundled or required here — the review workflow in this file is
 > self-contained.
 
+## Prerequisites
+
+- `gh` (GitHub CLI, authenticated with permission to read PRs and submit PR reviews)
+- `jq` (JSON processor)
+
+### Requirements (machine-readable)
+
+- pat_scopes: [repo]
+- labels_required: []
+- labels_applied: []
+- programs: [review]
+
 ## Variables
 
 Set at session start:

@@ -44,7 +44,7 @@ comments, and posts a GitHub review after user approval.
 ### Requirements (machine-readable)
 
 - pat_scopes: [repo]
-- labels_required: []
+- labels_required: [ready-for-ai-review]
 - labels_applied: []
 - programs: [review]
 

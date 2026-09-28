@@ -18,6 +18,13 @@ The report is produced in **two phases**:
 - **GitHub CLI (`gh`)** — authenticated with access to the target org
 - **Token scope**: `read:project` is optional — it only enriches the epic Status column from the Projects v2 board. Active-epic detection is sub-issue-based and works without it.
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo, read:org]
+- labels_required: [epic]
+- labels_applied: []
+- programs: [report]
+
 ## Quick Start
 
 ```bash

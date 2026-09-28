@@ -21,6 +21,13 @@ Re-verify and fix broken links reported by the link-health-scanner. Creates fork
 - `jq` (JSON processor)
 - `curl` (for external link verification and Wayback Machine)
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo]
+- labels_required: []
+- labels_applied: [broken-link/unfixable]
+- programs: [fixer]
+
 ## Before Running
 
 ### 1. Verify authentication

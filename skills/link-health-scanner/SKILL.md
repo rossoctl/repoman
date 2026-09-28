@@ -22,6 +22,13 @@ Scan all repositories in a GitHub organization for broken links. Creates GitHub 
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 
+### Requirements (machine-readable)
+
+- pat_scopes: [repo]
+- labels_required: []
+- labels_applied: [kind/bug, broken-link/internal, broken-link/external]
+- programs: [scanner]
+
 ## Before Running
 
 ### 1. Verify authentication

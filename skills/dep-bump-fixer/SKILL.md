@@ -22,7 +22,7 @@ Respond to scanner-created issues (`[dep-bump]` title prefix) with severity-appr
 
 ### Requirements (machine-readable)
 
-- pat_scopes: [repo, read:org]
+- pat_scopes: [repo]
 - labels_required: []
 - labels_applied: []
 - programs: [fixer]

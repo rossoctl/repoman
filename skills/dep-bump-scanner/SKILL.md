@@ -22,7 +22,7 @@ Monitor all repositories in a GitHub organization for open Dependabot PRs. Class
 
 ### Requirements (machine-readable)
 
-- pat_scopes: [repo, read:org]
+- pat_scopes: [repo]
 - labels_required: []
 - labels_applied: []
 - programs: [scanner]

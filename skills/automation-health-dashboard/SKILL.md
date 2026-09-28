@@ -21,7 +21,7 @@ Generate a unified executive-facing dashboard combining link-health and dep-bump
 
 ### Requirements (machine-readable)
 
-- pat_scopes: [repo, read:org]
+- pat_scopes: [repo]
 - labels_required: []
 - labels_applied: []
 - programs: [dashboard]

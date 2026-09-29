@@ -16,7 +16,7 @@ Keep local clones of the enrolled repos current so the scanner, fixer, and repor
 
 ## Prerequisites
 
-- `bash` 4+ (macOS ships 3.2; use `brew install bash` for 4+)
+- `bash` 3.2+ (the macOS system default works; the script avoids bash 4 features)
 - `git`
 - a readable `~/.repoman/repos.json` (the enrolled set)
 - repoman config providing `REPOS_DIR`

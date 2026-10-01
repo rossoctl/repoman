@@ -37,9 +37,14 @@ The dashboard reads from report files produced by other programs. At minimum one
 ### 2. Set environment variables
 
 ```bash
-export REPORTS_DIR=~/reports          # base dir containing link-health/ and dep-bump/ subdirs
-export KAGENTI_DIR=~/my-org/main-repo # path to org's main repo clone (for live mode)
+export REPORTS_DIR=~/reports            # base dir containing link-health/ and dep-bump/ subdirs
+export MAIN_REPO_DIR=~/my-org/main-repo # path to the report-target repo clone (overrides the REPOS_DIR-derived default; for live mode)
 ```
+
+**Note:** the dashboard script calls `repoman_config` unconditionally, so
+`~/.repoman/config.json` (with `repos_dir` and `fork_owner` set) is required
+even for `--dry-run` runs. This script is no longer standalone the way earlier
+versions were.
 
 ### 3. Program discovery (how the dashboard knows which sections to render)
 
@@ -75,7 +80,7 @@ bash scripts/automation-health-dashboard.sh --dry-run --index /path/to/_index.js
 **Live run (commits and pushes to fork PR):**
 
 ```bash
-bash scripts/automation-health-dashboard.sh --live --org <org>
+bash scripts/automation-health-dashboard.sh --live --main-repo-dir /path/to/automation
 ```
 
 ## Dashboard Sections
@@ -83,7 +88,6 @@ bash scripts/automation-health-dashboard.sh --live --org <org>
 - **Executive Summary** — total issues created/resolved, PRs opened, estimated hours saved
 - **Link Health** — broken links by type, trend table, cumulative issues
 - **Dependency Bumps** — stale PRs by tier, SLA compliance, median TTM, coverage
-- **PR Review Bot** — clawgenti reviews (cumulative), queue depth, and median time-to-merge (hours) before vs. after each repo's own activation; reviewed-vs-unreviewed shown as secondary context
 - **Cross-Program Coverage** — which repos are under which programs
 - **Cron Health** — job schedules and last run status
 
@@ -94,12 +98,9 @@ If only one program's reports are available, the dashboard generates with partia
 ## Known Limitations (v1)
 
 1. Which programs render is discovered from the `_index.json` registry (with a disk-derived fallback); a program only has a dashboard section if the script also carries an extraction block for it (link-health, dep-bump), so a registry entry for any other id is skipped with a note rather than rendered
-2. Fork owner and target repo default to clawgenti/kagenti (configurable via CLI)
+2. The report-target repo is hardcoded (`REPORT_TARGET_REPO="rossoctl/automation"`); the fork owner comes from `repoman_config` (`~/.repoman/config.json`), not from a CLI flag — there is no `--org`/`--fork-owner` option
 3. Cron health table has static entries (does not read from jobs.json)
 4. Hours-saved heuristic is fixed at 15 min/issue
-5. PR-review impact uses a marker-based reviewed flag (`<!-- reviewed: -->` in the review body); the before/after split is per repo, derived from the earliest reviewed PR in that repo (no hardcoded date)
-6. TTM is reported in median hours (PRs here merge in hours, so days would round to 0); reviewed-vs-unreviewed is selection-biased (`ready-for-ai-review` marks substantive PRs), so before/after-activation is the headline impact measure
-7. Review counts are cumulative from fixer-history.json; the live queue is from latest.json
 
 ## Safety
 

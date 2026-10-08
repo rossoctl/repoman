@@ -34,17 +34,19 @@ python3 {baseDir}/scripts/report.py --org <org> --output report.md --json-output
 # Report on specific date range
 python3 {baseDir}/scripts/report.py --org <org> --since 2026-03-23 --until 2026-03-30 --output report.md --json-output report-data.json
 
-# Report on an explicit repo set (owner-qualified); skips org-wide discovery
-python3 {baseDir}/scripts/report.py --org <org> --repos <org>/repo-a <org>/repo-b --output report.md --json-output report-data.json
+# Report on an explicit repo set (owner-qualified); skips org-wide discovery.
+# --org is OPTIONAL here: each entry carries its own owner, so the set may span
+# owners. A bare (unqualified) repo name still needs --org to supply its owner.
+python3 {baseDir}/scripts/report.py --repos owner-a/repo-a owner-b/repo-b --output report.md --json-output report-data.json
 
 # Run epic tracker standalone (for debugging)
-python3 {baseDir}/scripts/epic-tracker.py --org <org> --since 2026-03-23 --until 2026-03-30
+python3 {baseDir}/scripts/epic-tracker.py --repos owner-a/repo-a owner-b/repo-b --since 2026-03-23 --until 2026-03-30
 
 # Post report to a GitHub issue
 gh issue create -R <org>/<repo> --title "Weekly Report $(date +%Y-%m-%d)" --body-file report.md
 ```
 
-When `--repos` is omitted, the report discovers all repos in the org (the unchanged default). Automation deployments pass the curated core-repo allowlist via the `weekly-report.sh` wrapper, which resolves the list and calls `report.py --repos` for you.
+`--org` and `--repos` cover two modes. With `--org` and no `--repos`, the report discovers all repos in that org (the unchanged default). With an owner-qualified `--repos` set, `--org` is optional and the set may span multiple owners — each repo is fetched and linked under its own owner, and a report covering more than one owner skips the org-scoped Projects v2 status lookup (which has no single org to query) and falls back to activity-based epic detection. Automation deployments pass the curated, possibly multi-owner allowlist via the `weekly-report.sh` wrapper, which resolves the list and calls `report.py --repos owner/name …` for you.
 
 ## What the Report Includes
 

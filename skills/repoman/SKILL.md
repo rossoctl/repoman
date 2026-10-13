@@ -177,10 +177,15 @@ question. You may offer to run it once at the end of setup as a convenience, but
 it is not one of the five.
 
 **Q1 path rejection.** `validate_repos_dir` (in `org.sh`) rejects empty values,
-dangerous system paths, `$HOME` itself, and non-existent dirs. The default
-`~/repoman/repos` is a subdir and passes. If a user-offered path is rejected,
-re-prompt with the specific reason the validator gave — do **not** silently fall
-back to the default.
+dangerous system paths, `$HOME` itself, and non-existent dirs. The last clause
+matters on a fresh system: `~/repoman/repos` is a safe subdir path, but it does
+not exist until something creates it, and `init-config` only `mkdir -p`s the
+config file's parent under `~/.repoman/` — never `--repos-dir`. So before
+calling `init-config`, `mkdir -p` the chosen repos dir. That directory is
+outside `~/.repoman/`, so creating it does **not** violate the hard invariant
+(which guards only `~/.repoman/` state). If a user-offered path is rejected for
+any other reason, re-prompt with the specific reason the validator gave — do
+**not** silently fall back to the default.
 
 **Q3 requirement wiring.** For each program the user enables:
 

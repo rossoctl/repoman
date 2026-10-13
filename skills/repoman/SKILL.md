@@ -291,8 +291,11 @@ lookup.
 
 After reconciliation you hold a concrete, enrolled, unambiguous repo set (or the
 whole set). The **run path** (capability-check → refresh clones → exec scanner →
-write reports + `_index.json`) is a named follow-on and is **not implemented in
-this skill**. Until it lands, complete reconciliation and **report the resolved
+write reports + `_index.json`) is a named follow-on — the "program invocation
+wiring" half of [#107](https://github.com/rossoctl/automation/issues/107) (epic
+[#72](https://github.com/rossoctl/automation/issues/72)) — and is **not
+implemented in this skill**. Until it lands, complete reconciliation and
+**report the resolved
 `owner/name` set you *would* run** — do not attempt to exec a scanner yourself.
 This keeps the setup/activate/reconcile flows fully usable on their own.
 

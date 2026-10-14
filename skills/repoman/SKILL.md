@@ -53,9 +53,12 @@ to infer state. You write it only by calling the setup writer.
   command: it is a sourced library that exposes the function
   `repoman_parse_requirements`. You must **source it, then call the function** —
   `source <automation>/scripts/repoman-requirements.sh` then
-  `repoman_parse_requirements <skill-md>`. Executing it directly (e.g.
-  `repoman-requirements.sh <skill-md>`) fails loud with that guidance; it does
-  **not** emit JSON.
+  `repoman_parse_requirements <skill-md>`. Never execute it directly (e.g.
+  `repoman-requirements.sh <skill-md>`): a direct run does **not** emit the JSON
+  — once rossoctl/automation#113 lands it fails loud with this same guidance,
+  and before that it exits 0 with empty output (which, captured and parsed as
+  `[]`, would silently write empty requirements). Either way, sourcing is the
+  only correct path.
 
 Program-name → agent-skills `SKILL.md` directory map (canonical allowlist name
 on the left, skill dir on the right):
@@ -256,10 +259,11 @@ any other reason, re-prompt with the specific reason the validator gave — do
    `repoman_parse_requirements <skill-md>` →
    `{"pat_scopes":[...],"labels_required":[...],"labels_applied":[...],"programs":[...]}`.
    Do **not** execute the script directly — it is a sourced library, not a
-   command, and running it as a command fails loud rather than emitting JSON. If
-   you ever capture empty output here, you executed it instead of sourcing it;
-   source it and retry (empty requirements would silently defeat the capability
-   gate);
+   command, and running it as a command does not emit the JSON (post
+   rossoctl/automation#113 it fails loud; before that it exits silently empty).
+   If you ever capture empty output here, you executed it instead of sourcing
+   it; source it and retry (empty requirements would silently defeat the
+   capability gate);
 3. join each JSON array into a comma-separated string (empty array → empty CSV,
    which `set-requirements` normalizes back to `[]`);
 4. call `set-requirements --program <name> --pat-scopes <csv>

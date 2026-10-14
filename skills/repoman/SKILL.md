@@ -47,9 +47,18 @@ to infer state. You write it only by calling the setup writer.
   state and reconcile names.
 - **In an automation checkout** (not bundled): the writer `repoman-setup.sh`,
   the capability gate `repoman-check.sh`, and the requirements parser
-  `repoman-requirements.sh` (which exposes `repoman_parse_requirements`). Run
-  these from an automation checkout. **Run every script with `--help` first** to
-  see full usage.
+  `repoman-requirements.sh`. Run these from an automation checkout.
+  `repoman-setup.sh` and `repoman-check.sh` are **commands** — run them with
+  `--help` first to see full usage. `repoman-requirements.sh` is **not** a
+  command: it is a sourced library that exposes the function
+  `repoman_parse_requirements`. You must **source it, then call the function** —
+  `source <automation>/scripts/repoman-requirements.sh` then
+  `repoman_parse_requirements <skill-md>`. Never execute it directly (e.g.
+  `repoman-requirements.sh <skill-md>`): a direct run does **not** emit the JSON
+  — once rossoctl/automation#113 lands it fails loud with this same guidance,
+  and before that it exits 0 with empty output (which, captured and parsed as
+  `[]`, would silently write empty requirements). Either way, sourcing is the
+  only correct path.
 
 Program-name → agent-skills `SKILL.md` directory map (canonical allowlist name
 on the left, skill dir on the right):
@@ -125,13 +134,18 @@ state so it never lies about what is installed:
 1. **What RepoMan does, in one or two sentences** — it runs automated
    maintenance programs across a set of GitHub repos you enroll once, handling
    capability checks and output wiring for you.
-2. **Which programs ship and are ready to deploy** — the authoritative names are
-   the `KNOWN_PROGRAMS` allowlist in `repoman-setup.sh` (`link-health`,
-   `dep-bump`, `pr-review`, `automation-health`, `repo-sync`), each shown with
-   its one-line description read from the program's `SKILL.md` (the same source
-   the gate uses; use the program→skill-dir map above). For a returning user,
-   split into **enabled** (already active in `~/.repoman/programs/`) vs
-   **available to activate**.
+2. **Which programs ship and are ready to deploy** — present each with its
+   **friendly display name** (see "Friendly program names" below), and its
+   one-line description read from the program's `SKILL.md` (the same source the
+   gate uses; use the program→skill-dir map above). The authoritative backend
+   names remain the `KNOWN_PROGRAMS` allowlist in `repoman-setup.sh`
+   (`link-health`, `dep-bump`, `pr-review`, `automation-health`, `repo-sync`) —
+   show the friendly names to the user, resolve back to the canonical token
+   before any writer call. The description in each `SKILL.md` frontmatter is
+   usually a YAML **folded block scalar** (`description: >-` with the text on the
+   following indented lines), not an inline value; read the folded block, not the
+   literal `>-`. For a returning user, split into **enabled** (already active in
+   `~/.repoman/programs/`) vs **available to activate**.
 3. **What else can be activated** — the available-but-not-enabled set, so the
    path to "turn on one more program" is visible without the user guessing a
    name.
@@ -146,6 +160,55 @@ they want in a follow-up turn.
 
 The orientation makes **no** `~/.repoman/` writes; it is pure presentation over
 inferred state.
+
+## Presentation (naming, pacing, and choice UI)
+
+These rules shape every user-facing prompt. They never change what gets written
+(the writer and its allowlist stay canonical); they shape only how you ask.
+
+### Friendly program names
+
+Present programs by a friendly display name, accept close/fuzzy input, and
+resolve back to the canonical `KNOWN_PROGRAMS` token **before any writer call**.
+The allowlist stays the single source of truth — `enable-program` and
+`set-requirements` validate against the canonical token, so a friendly name that
+does not resolve must never reach them.
+
+| Friendly name (shown) | Canonical token (backend) |
+|-----------------------|---------------------------|
+| Link-Health-Manager | `link-health` |
+| Dep-Bump-Manager | `dep-bump` |
+| PR-Review-Manager | `pr-review` |
+| Automation-Health-Manager | `automation-health` |
+| Repo-Sync-Manager | `repo-sync` |
+
+Match user input leniently against this list: "pr review", "pr-review-manager",
+and "prmanager" all resolve to `pr-review`; "dep bump" → `dep-bump`. **Always**
+present the choices as an enumerated list so a mid/low-tier driver resolves by
+selection, never by free-form reasoning. If an input is ambiguous or matches
+nothing, re-ask with the enumerated list — do not guess.
+
+### Pacing (keep setup fast)
+
+Setup should feel like it takes under five minutes. Follow a tight loop per
+question: **what is missing → what to input (with a default) → what to expect
+next.** Keep prompts terse and enumerated; one question at a time. Do **not**
+narrate internals — script names, `--help` output, parse mechanics, subcommand
+wiring — in user-facing prompts. Still *perform* those checks (run `--help`,
+source libraries, verify state), but surface them only when something is
+genuinely ambiguous or an error needs the user's attention.
+
+### Choice UI
+
+If the host exposes a structured single/multi-select prompt (e.g. radio buttons
+with a free-form "other" field), prefer it to render the enumerated options for
+the program choice (Q3) and the nightly-sync choice (Q4): it demonstrates both
+structured selection and natural free-form input in one widget. Fall back to a
+numbered markdown list when no such tool is available. Either way the
+enumerated-options contract holds. Note a host picker may cap the number of
+options (Claude Code's caps at four); when there are more programs than slots,
+show the most likely options and rely on the free-form "other" field for the
+rest.
 
 ## Setup conversation (five questions)
 
@@ -191,8 +254,16 @@ any other reason, re-prompt with the specific reason the validator gave — do
 
 1. locate that program's `SKILL.md` (via the program→skill-dir map above, e.g.
    `skills/github-pr-review/SKILL.md`);
-2. call `repoman_parse_requirements <skill-md>` →
-   `{"pat_scopes":[...],"labels_required":[...],"labels_applied":[...],"programs":[...]}`;
+2. **source** the parser library once, then call the function:
+   `source <automation>/scripts/repoman-requirements.sh` →
+   `repoman_parse_requirements <skill-md>` →
+   `{"pat_scopes":[...],"labels_required":[...],"labels_applied":[...],"programs":[...]}`.
+   Do **not** execute the script directly — it is a sourced library, not a
+   command, and running it as a command does not emit the JSON (post
+   rossoctl/automation#113 it fails loud; before that it exits silently empty).
+   If you ever capture empty output here, you executed it instead of sourcing
+   it; source it and retry (empty requirements would silently defeat the
+   capability gate);
 3. join each JSON array into a comma-separated string (empty array → empty CSV,
    which `set-requirements` normalizes back to `[]`);
 4. call `set-requirements --program <name> --pat-scopes <csv>

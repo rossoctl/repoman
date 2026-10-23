@@ -42,18 +42,24 @@ to infer state. You write it only by calling the setup writer.
 
 ## Where the scripts live
 
-- **Bundled with this skill** (`scripts/org.sh`): the enrolled-set resolver and
+The entire engine is **bundled with this plugin** under
+`${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/` — there is no separate automation
+checkout to install or locate. Resolve that directory at runtime via
+`${CLAUDE_PLUGIN_ROOT}` and point the orchestrator at it with
+`REPOMAN_RUN_BIN="${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts"` (the existing
+run-time override `repoman-run.sh` reads). The scripts are a flat set, so each one
+sources its siblings (`program-lib.sh`, `org.sh`, …) from that same directory.
+
+- **Read-state / reconcile helpers** (`org.sh`): the enrolled-set resolver and
   `repoman_match_name` (bare-name → enrolled owner lookup). Source these to read
   state and reconcile names.
-- **In an automation checkout** (not bundled): the writer `repoman-setup.sh`,
-  the capability gate `repoman-check.sh`, and the requirements parser
-  `repoman-requirements.sh`. Run these from an automation checkout.
-  `repoman-setup.sh` and `repoman-check.sh` are **commands** — run them with
-  `--help` first to see full usage. `repoman-requirements.sh` is **not** a
-  command: it is a sourced library that exposes the function
+- **The writer `repoman-setup.sh`, the capability gate `repoman-check.sh`, and
+  the orchestrator `repoman-run.sh`** are **commands** — run them from the bundled
+  scripts dir, `--help` first to see full usage. `repoman-requirements.sh` is
+  **not** a command: it is a sourced library that exposes the function
   `repoman_parse_requirements`. You must **source it, then call the function** —
-  `source <automation>/scripts/repoman-requirements.sh` then
-  `repoman_parse_requirements <skill-md>`. Never execute it directly (e.g.
+  `source "${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/repoman-requirements.sh"`
+  then `repoman_parse_requirements <skill-md>`. Never execute it directly (e.g.
   `repoman-requirements.sh <skill-md>`): a direct run does **not** emit the JSON
   — once rossoctl/automation#113 lands it fails loud with this same guidance,
   and before that it exits 0 with empty output (which, captured and parsed as
@@ -255,7 +261,7 @@ any other reason, re-prompt with the specific reason the validator gave — do
 1. locate that program's `SKILL.md` (via the program→skill-dir map above, e.g.
    `skills/github-pr-review/SKILL.md`);
 2. **source** the parser library once, then call the function:
-   `source <automation>/scripts/repoman-requirements.sh` →
+   `source "${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/repoman-requirements.sh"` →
    `repoman_parse_requirements <skill-md>` →
    `{"pat_scopes":[...],"labels_required":[...],"labels_applied":[...],"programs":[...]}`.
    Do **not** execute the script directly — it is a sourced library, not a
@@ -376,8 +382,10 @@ This keeps the setup/activate/reconcile flows fully usable on their own.
   4 features)
 - `gh` (GitHub CLI, authenticated with org access) — for org detection/expansion
 - `jq` (JSON processor)
-- An **automation checkout** on `PATH` or at a known location, for
-  `repoman-setup.sh`, `repoman-check.sh`, and `repoman-requirements.sh`.
+- The RepoMan **engine**, bundled with this plugin at
+  `${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/` (`repoman-setup.sh`,
+  `repoman-check.sh`, `repoman-run.sh`, `repoman-requirements.sh`, and the
+  program scanners). No separate checkout is required.
 
 ### Requirements (machine-readable)
 

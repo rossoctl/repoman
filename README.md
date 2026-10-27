@@ -1,24 +1,15 @@
-# rossoctl Agent Skills
+# RepoMan
 
-Agent Skills for automated maintenance of GitHub organizations. Each skill teaches an AI agent how to perform a specific task using shell scripts and structured instructions.
+RepoMan runs automated maintenance **programs** (PR review, link health, dependency
+bumps, weekly reports, repo sync) across a set of GitHub repos you enroll once. It
+handles the capability checks and output wiring for you, so you install once and
+enable programs on the fly.
+
+`/repoman` is a single intent-dispatching entrypoint: it reads your `~/.repoman/`
+state and your message and infers whether you are setting up, enabling a program, or
+running one.
 
 Built to the [Agent Skills specification](https://agentskills.io/specification).
-
-## Skills
-
-| Skill | Description |
-|-------|-------------|
-| [repoman](skills/repoman/) | The RepoMan entrypoint and self-contained bundle — first-time setup, enabling a program, enrolling repos or an org, running a program; ships every program skill + the engine so you install once and enable programs on the fly |
-| [link-health-scanner](skills/link-health-scanner/) | Scan repos for broken links, create GitHub issues for findings |
-| [link-health-fixer](skills/link-health-fixer/) | Re-verify and fix broken links, open PRs for fixes |
-| [dep-bump-scanner](skills/dep-bump-scanner/) | Monitor Dependabot PRs, classify by severity, flag SLA breaches |
-| [dep-bump-fixer](skills/dep-bump-fixer/) | Analyze stale Dependabot PRs and post commentary to accelerate review |
-| [automation-health-dashboard](skills/automation-health-dashboard/) | Generate executive-facing dashboard combining all program metrics |
-| [github-weekly-report](skills/github-weekly-report/) | Generate weekly org activity reports with merged PRs, CI health, and active-epic tracking |
-| [github-pr-review](skills/github-pr-review/) | Automated PR review: conventions, security, CI status, inline comments |
-| [byo-rossoctl-cortex](skills/byo-rossoctl-cortex/) | Bring up a local rossoctl cortex (AuthBridge plugin pipeline) to host an agent; per-agent LiteLLM budget tracking isolated by env var |
-| [repo-sync](skills/repo-sync/) | Keep local clones of the enrolled repos current: clone missing ones, fast-forward pull the rest, read-only toward GitHub |
-| [hypershift](skills/hypershift/) | Full HyperShift (hosted OpenShift on AWS) cluster lifecycle across 7 skills — setup, preflight, quotas, create/destroy, debug, TTL-based cleanup; also needs `aws`, `oc`, `ansible` |
 
 ## Installation
 
@@ -26,59 +17,57 @@ Built to the [Agent Skills specification](https://agentskills.io/specification).
 
 ```
 /plugin marketplace add rossoctl/repoman
-/plugin install <plugin-name>@rossoctl-repoman
-```
-
-**Recommended: install `repoman`.** The `repoman` plugin is self-contained — it
-bundles the RepoMan entrypoint, every program skill (link-health, dep-bump,
-pr-review, repo-sync, automation-health, weekly-report) with their scanner and
-fixer skills, and the engine scripts. One install gives you the whole system and
-lets you enable more programs on the fly:
-
-```
 /plugin install repoman@rossoctl-repoman
 ```
 
-**Or install a single program standalone.** Each program is also published as its
-own plugin, for using it on its own (e.g. a one-off PR review) without the full
-RepoMan bundle. Replace `<plugin-name>` with a plugin name such as `link-health`,
-`dep-bump`, `pr-review`, `automation-health`, or `repo-sync`. Plugin names are the
-ones declared in the marketplace, which can differ from the per-skill directory
-names in the [Skills](#skills) table. Run `/plugin` after adding the marketplace to
-browse the authoritative list. Installing one standalone plugin does **not** pull
-in the others, so repeat the `install` line per plugin you want.
+That one install is the whole system — the `repoman` plugin is **self-contained**: it
+bundles the `/repoman` entrypoint, every program skill (scanner and fixer), and the
+engine scripts. Enabling more programs later needs no further installs.
 
 ### Updating
 
-To pick up new changes after they land upstream, refresh the marketplace and
-update any installed plugins (a Claude Code restart applies plugin updates):
+Refresh the marketplace and update the plugin (a Claude Code restart applies updates):
 
 ```
 /plugin marketplace update rossoctl-repoman
-/plugin update <plugin-name>@rossoctl-repoman
+/plugin update repoman@rossoctl-repoman
 ```
 
-Updating `repoman` refreshes the bundled engine scripts too, so engine fixes reach
-every RepoMan user through a single plugin update.
+Updating `repoman` refreshes the bundled engine too, so engine fixes reach every user
+through a single plugin update.
 
-### Manual
+## Programs
 
-Copy the desired skill directory into your project's `.claude/skills/` directory:
+The `repoman` bundle ships these programs, each ready to enable:
 
-```bash
-cp -r skills/link-health-scanner /path/to/project/.claude/skills/
-```
+| Program | What it does |
+|---------|--------------|
+| [repoman](skills/repoman/) | The entrypoint: first-time setup, enabling a program, enrolling repos or an org, running a program across enrolled repos |
+| [link-health](skills/link-health-scanner/) | Scan repos for broken links and file issues ([fixer](skills/link-health-fixer/) re-verifies and opens fix PRs) |
+| [dep-bump](skills/dep-bump-scanner/) | Monitor Dependabot PRs, classify by severity, flag SLA breaches ([fixer](skills/dep-bump-fixer/) posts commentary to accelerate review) |
+| [pr-review](skills/github-pr-review/) | Automated PR review: conventions, security, CI status, inline comments |
+| [repo-sync](skills/repo-sync/) | Keep local clones of enrolled repos current; read-only toward GitHub |
+| [automation-health](skills/automation-health-dashboard/) | Generate an executive-facing dashboard combining all program metrics |
+| [weekly-report](skills/github-weekly-report/) | Weekly org activity reports with merged PRs, CI health, and active-epic tracking |
+
+Each program is also published as its own standalone plugin, for using one on its own
+(for example a one-off PR review) without the full RepoMan setup. Run `/plugin` after
+adding the marketplace to browse the authoritative list.
 
 ## Prerequisites
 
-All skills in this repo require:
-
-- `bash` 3.2+ — every skill runs on the macOS system default; no bash-4 features
-  are used.
-- `gh` (GitHub CLI, authenticated)
+- `bash` 3.2+ — runs on the macOS system default; no bash-4 features are used.
+- `gh` (GitHub CLI, authenticated with org access)
 - `jq`
 
-Individual skills may have additional requirements documented in their `SKILL.md`.
+Individual programs may have additional requirements documented in their `SKILL.md`.
+
+## How it is built
+
+The engine scripts are vendored from [rossoctl/automation](https://github.com/rossoctl/automation)
+(the development source of truth) into this distribution repo, with a provenance stamp
+(`skills/repoman/scripts/_vendor.json`) recording the exact source commit. See the
+`CHANGELOG.md` for release history.
 
 ## License
 

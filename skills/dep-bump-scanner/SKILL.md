@@ -16,7 +16,7 @@ Monitor all repositories in a GitHub organization for open Dependabot PRs. Class
 
 ## Prerequisites
 
-- `bash` 4+ (macOS ships 3.2; use `brew install bash` for 4+)
+- `bash` 3.2+ (works with the macOS system default; no bash-4 features used)
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
 

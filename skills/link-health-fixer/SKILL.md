@@ -16,7 +16,7 @@ Re-verify and fix broken links reported by the link-health-scanner. Creates fork
 
 ## Prerequisites
 
-- `bash` 4+ (macOS ships 3.2; use `brew install bash` for 4+)
+- `bash` 3.2+ (works with the macOS system default; no bash-4 features used)
 - `gh` (GitHub CLI, authenticated with fork/PR permissions)
 - `jq` (JSON processor)
 - `curl` (for external link verification and Wayback Machine)

@@ -1,4 +1,4 @@
-# CLAUDE.md - Kagenti Agent Skills Repository
+# CLAUDE.md - RepoMan Repository
 
 ## DCO Sign-Off (Mandatory)
 

@@ -58,6 +58,9 @@ USAGE
   exit 0
 fi
 
+# Pin provenance on startup (6a). A resolution failure must not fail the scan.
+skill_attribution "github-pr-review" >/dev/null
+
 # Resolve the enrolled repo set from ~/.repoman/repos.json (owner/name tuples).
 # repoman_config is not needed here -- the scanner queries GitHub directly and
 # writes no fork, so it needs no REPOS_DIR/FORK_OWNER.

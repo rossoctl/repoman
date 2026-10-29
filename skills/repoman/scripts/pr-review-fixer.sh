@@ -25,7 +25,7 @@ COMMAND=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    begin|finalize) COMMAND="$1"; shift ;;
+    begin|finalize|footer) COMMAND="$1"; shift ;;
     --reports-dir) REPORTS_DIR="$2"; shift 2 ;;
     --verbose) VERBOSE=true; shift ;;
     --dry-run) DRY_RUN=true; shift ;;
@@ -45,6 +45,7 @@ USAGE:
 COMMANDS:
   begin       Read latest.json, mark eligible PRs as in_progress, output queue
   finalize    Check reviews API, move reviewed PRs to reviewed state
+  footer      Print the pinned-SHA attribution line for the review body
 
 OPTIONS:
   --reports-dir DIR   Reports directory (default: $REPORTS_DIR or ~/reports/pr-review)
@@ -67,8 +68,16 @@ USAGE
 fi
 
 if [ -z "$COMMAND" ]; then
-  echo "ERROR: command required (begin or finalize). Use --help for usage." >&2
+  echo "ERROR: command required (begin, finalize, or footer). Use --help for usage." >&2
   exit 1
+fi
+
+# Pin provenance (6a: create-only _meta, blob/main fallback). `footer` prints
+# the line that goes on the review body and its Slack post, not inline comments.
+SKILL_FOOTER=$(skill_attribution "github-pr-review")
+if [ "$COMMAND" = "footer" ]; then
+  printf '%s\n' "$SKILL_FOOTER"
+  exit 0
 fi
 
 # --- Setup ---

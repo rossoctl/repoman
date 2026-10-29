@@ -126,6 +126,31 @@ options and do **not** pick for the user:
 - **B — Setup only:** complete and confirm setup, then stop. The user
   re-invokes `/repoman` to run.
 
+## Startup banner
+
+On **interactive** `/repoman` invocations (a human-driven chat session — e.g.
+`/repoman` or `/repoman:repoman`), open with this ASCII header as the first
+user-facing content — before orientation, cold-start questions, activate/run
+handoff, or any other reply. Skip the banner for non-interactive contexts
+(scheduled agent runs, pipelines, CI). Print it verbatim in a fenced code
+block so the box-drawing characters align in monospace:
+
+```
+██████╗  ███████╗ ██████╗   ██████╗
+██╔══██╗ ██╔════╝ ██╔══██╗ ██╔═══██╗
+██████╔╝ █████╗   ██████╔╝ ██║   ██║
+██╔══██╗ ██╔══╝   ██╔═══╝  ██║   ██║
+██║  ██║ ███████╗ ██║      ╚██████╔╝
+╚═╝  ╚═╝ ╚══════╝ ╚═╝       ╚═════╝
+
+███╗   ███╗  █████╗  ███╗   ██╗
+████╗ ████║ ██╔══██╗ ████╗  ██║
+██╔████╔██║ ███████║ ██╔██╗ ██║
+██║╚██╔╝██║ ██╔══██║ ██║╚██╗██║
+██║ ╚═╝ ██║ ██║  ██║ ██║ ╚████║
+╚═╝     ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝
+```
+
 ## Welcome orientation (new-user acquisition)
 
 Whenever you reach a **no-intent branch** — a brand-new user with no setup, or a

@@ -76,6 +76,7 @@ on the left, skill dir on the right):
 | `pr-review` | `skills/github-pr-review/` |
 | `automation-health` | `skills/automation-health-dashboard/` |
 | `repo-sync` | `skills/repo-sync/` |
+| `doc-drift` | `skills/doc-drift-scanner/` |
 
 ## State-inference decision tree
 
@@ -211,6 +212,7 @@ does not resolve must never reach them.
 | PR-Review-Manager | `pr-review` |
 | Automation-Health-Manager | `automation-health` |
 | Repo-Sync-Manager | `repo-sync` |
+| Doc-Drift-Manager | `doc-drift` |
 
 Match user input leniently against this list: "pr review", "pr-review-manager",
 and "prmanager" all resolve to `pr-review`; "dep bump" → `dep-bump`. **Always**

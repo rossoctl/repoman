@@ -39,6 +39,7 @@ link-health	scanner	yes	yes	yes	link-health-scanner.sh	Link Health	$HOME/reports
 dep-bump	scanner	yes	yes	yes	dep-bump-scanner.sh	Dependency Bumps	$HOME/reports/dep-bump	yes	no
 pr-review	scanner	no	no	no	pr-review-scanner.sh	PR Review		yes	no
 weekly-report	scanner	no	no	no	weekly-report.sh	Weekly Report		no	no
+doc-drift	scanner	yes	yes	yes	doc-drift-scanner.sh	Doc Drift	$HOME/reports/doc-drift	yes	no
 automation-health	index-consumer	no	no	no	automation-health-dashboard.sh	Automation Health		yes	yes
 repo-sync	sync	no	no	no	repo-sync.sh	Repo Sync		yes	no"
 

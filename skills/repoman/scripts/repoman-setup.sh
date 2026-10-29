@@ -31,7 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # user who introduces a new program must add its identifier here until the
 # program registry (_index.json, tracked in #76) replaces it with a
 # discovered list.
-KNOWN_PROGRAMS="link-health dep-bump pr-review automation-health repo-sync weekly-report"
+KNOWN_PROGRAMS="link-health dep-bump pr-review automation-health repo-sync weekly-report doc-drift"
 
 usage() {
   cat <<'EOF'
@@ -51,7 +51,7 @@ Subcommands:
   enable-program --program <name>
       Merge {"enabled": true} into programs/<name>.json.
       Known programs: link-health, dep-bump, pr-review, automation-health,
-      repo-sync, weekly-report.
+      repo-sync, weekly-report, doc-drift.
 
   set-output --program <name> --mode same|central [--repo <owner/name>]
       Merge {"output_repo": {...}} into programs/<name>.json.

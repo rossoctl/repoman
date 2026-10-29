@@ -114,16 +114,20 @@ display_name_for() {
   case "$1" in
     link-health) echo "Link Health" ;;
     dep-bump)    echo "Dependency Bumps" ;;
+    doc-drift)   echo "Doc Drift" ;;
     *)           echo "" ;;
   esac
 }
 
 LINK_SCAN_DIR=""
 DEP_BUMP_DIR=""
+DOC_DRIFT_DIR=""
 HAS_LINK_HEALTH=false
 HAS_DEP_BUMP=false
+HAS_DOC_DRIFT=false
 LINK_HEALTH_HEADING="Link Health"
 DEP_BUMP_HEADING="Dependency Bumps"
+DOC_DRIFT_HEADING="Doc Drift"
 
 if [ -f "$INDEX_FILE" ]; then
   if ! jq empty "$INDEX_FILE" >/dev/null 2>&1; then
@@ -159,12 +163,18 @@ if [ -f "$INDEX_FILE" ]; then
         HAS_DEP_BUMP=true
         DEP_BUMP_HEADING="$entry_display"
         ;;
+      doc-drift)
+        DOC_DRIFT_DIR="$entry_path"
+        HAS_DOC_DRIFT=true
+        DOC_DRIFT_HEADING="$entry_display"
+        ;;
     esac
   done < <(jq -r 'keys[]' "$INDEX_FILE")
 else
   # Disk-derived fallback: no index, probe the known report subdirs directly.
   LINK_SCAN_DIR="$REPORTS_DIR/link-health"
   DEP_BUMP_DIR="$REPORTS_DIR/dep-bump"
+  DOC_DRIFT_DIR="$REPORTS_DIR/doc-drift"
 
   if [ -f "$LINK_SCAN_DIR/latest.json" ] && [ -f "$LINK_SCAN_DIR/history.json" ]; then
     HAS_LINK_HEALTH=true
@@ -174,17 +184,22 @@ else
     HAS_DEP_BUMP=true
     DEP_BUMP_HEADING=$(display_name_for "dep-bump")
   fi
+  if [ -f "$DOC_DRIFT_DIR/latest.json" ] && [ -f "$DOC_DRIFT_DIR/history.json" ]; then
+    HAS_DOC_DRIFT=true
+    DOC_DRIFT_HEADING=$(display_name_for "doc-drift")
+  fi
 fi
 
-if [ "$HAS_LINK_HEALTH" = false ] && [ "$HAS_DEP_BUMP" = false ]; then
+if [ "$HAS_LINK_HEALTH" = false ] && [ "$HAS_DEP_BUMP" = false ] && [ "$HAS_DOC_DRIFT" = false ]; then
   echo "ERROR: No program reports found in $REPORTS_DIR"
-  echo "Expected: $REPORTS_DIR/link-health/latest.json and/or $REPORTS_DIR/dep-bump/latest.json"
+  echo "Expected: $REPORTS_DIR/link-health/, dep-bump/, and/or doc-drift/ latest.json"
   exit 1
 fi
 
 PROGRAMS_ACTIVE=0
 if [ "$HAS_LINK_HEALTH" = true ]; then PROGRAMS_ACTIVE=$((PROGRAMS_ACTIVE + 1)); fi
 if [ "$HAS_DEP_BUMP" = true ]; then PROGRAMS_ACTIVE=$((PROGRAMS_ACTIVE + 1)); fi
+if [ "$HAS_DOC_DRIFT" = true ]; then PROGRAMS_ACTIVE=$((PROGRAMS_ACTIVE + 1)); fi
 
 # --- Setup ---
 TMPDIR=$(mktemp -d)
@@ -211,6 +226,8 @@ LH_ISSUES_CLOSED=0
 DB_ISSUES_CREATED=0
 DB_ISSUES_CLOSED=0
 DB_FIXER_CLOSED=0
+DD_ISSUES_CREATED=0
+DD_ISSUES_CLOSED=0
 TOTAL_PRS_OPENED=0
 LAST_SCAN_DATE="unknown"
 
@@ -241,14 +258,26 @@ if [ "$HAS_DEP_BUMP" = true ]; then
   fi
 fi
 
-TOTAL_ISSUES_CREATED=$((LH_ISSUES_CREATED + DB_ISSUES_CREATED))
-TOTAL_ISSUES_RESOLVED=$((LH_ISSUES_CLOSED + DB_ISSUES_CLOSED + DB_FIXER_CLOSED))
+if [ "$HAS_DOC_DRIFT" = true ]; then
+  DD_ISSUES_CREATED=$(jq '[.[] | .issues_created // 0] | add // 0' "$DOC_DRIFT_DIR/history.json")
+  DD_ISSUES_CLOSED=$(jq '[.[] | .issues_closed // 0] | add // 0' "$DOC_DRIFT_DIR/history.json")
+  dd_last_date=$(jq -r '.date // ""' "$DOC_DRIFT_DIR/latest.json")
+  if [ -n "$dd_last_date" ]; then
+    dd_date="${dd_last_date%%T*}"
+    if [ "$LAST_SCAN_DATE" = "unknown" ] || [[ "$dd_date" > "$LAST_SCAN_DATE" ]]; then
+      LAST_SCAN_DATE="$dd_date"
+    fi
+  fi
+fi
+
+TOTAL_ISSUES_CREATED=$((LH_ISSUES_CREATED + DB_ISSUES_CREATED + DD_ISSUES_CREATED))
+TOTAL_ISSUES_RESOLVED=$((LH_ISSUES_CLOSED + DB_ISSUES_CLOSED + DB_FIXER_CLOSED + DD_ISSUES_CLOSED))
 HOURS_SAVED=$(echo "$TOTAL_ISSUES_RESOLVED" | awk '{printf "%.1f", $1 * 0.25}')
 
 if [ "$VERBOSE" = true ]; then
   echo "Executive metrics:"
-  echo "  Issues created: $TOTAL_ISSUES_CREATED (LH: $LH_ISSUES_CREATED, DB: $DB_ISSUES_CREATED)"
-  echo "  Issues resolved: $TOTAL_ISSUES_RESOLVED (LH: $LH_ISSUES_CLOSED, DB: $DB_ISSUES_CLOSED, fixer: $DB_FIXER_CLOSED)"
+  echo "  Issues created: $TOTAL_ISSUES_CREATED (LH: $LH_ISSUES_CREATED, DB: $DB_ISSUES_CREATED, DD: $DD_ISSUES_CREATED)"
+  echo "  Issues resolved: $TOTAL_ISSUES_RESOLVED (LH: $LH_ISSUES_CLOSED, DB: $DB_ISSUES_CLOSED, DD: $DD_ISSUES_CLOSED, fixer: $DB_FIXER_CLOSED)"
   echo "  PRs opened: $TOTAL_PRS_OPENED"
   echo "  Hours saved: $HOURS_SAVED"
   echo ""
@@ -363,6 +392,25 @@ if [ "$HAS_DEP_BUMP" = true ]; then
 fi
 
 # =============================================================================
+# Step 4b: Compute doc-drift section
+# =============================================================================
+
+DD_REPOS_SCANNED=0
+DD_CORRECTIONS=0
+DD_ADDITIONS=0
+DD_TREND_TABLE="| - | - | - | - |"
+
+if [ "$HAS_DOC_DRIFT" = true ]; then
+  DD_REPOS_SCANNED=$(jq '.repos_scanned // 0' "$DOC_DRIFT_DIR/latest.json")
+  DD_CORRECTIONS=$(jq '.corrections // ([.findings[]? | select(.kind=="correction")] | length)' "$DOC_DRIFT_DIR/latest.json")
+  DD_ADDITIONS=$(jq '.additions // ([.findings[]? | select(.kind=="addition")] | length)' "$DOC_DRIFT_DIR/latest.json")
+  DD_TREND_TABLE=$(jq -r '
+    .[-10:] | reverse | .[] |
+    "| \(.date | split("T")[0]) | \(.corrections // 0) | \(.additions // 0) | \(if .new > .fixed then "+\(.new - .fixed)" elif .new < .fixed then "\(.new - .fixed)" else "0" end) |"
+  ' "$DOC_DRIFT_DIR/history.json" 2>/dev/null || echo "| - | - | - | - |")
+fi
+
+# =============================================================================
 # Step 5: Compute cross-program coverage
 # =============================================================================
 
@@ -454,7 +502,7 @@ cat > "$TMPDIR/automation-health.md" << DASHBOARD_EOF
 
 | Metric | Value |
 |--------|-------|
-| Total issues auto-created | $TOTAL_ISSUES_CREATED (link-health: $LH_ISSUES_CREATED, dep-bump: $DB_ISSUES_CREATED) |
+| Total issues auto-created | $TOTAL_ISSUES_CREATED (link-health: $LH_ISSUES_CREATED, dep-bump: $DB_ISSUES_CREATED, doc-drift: $DD_ISSUES_CREATED) |
 | Total issues auto-resolved | $TOTAL_ISSUES_RESOLVED |
 | Total PRs auto-opened | $TOTAL_PRS_OPENED |
 | Estimated hours saved | ${HOURS_SAVED} hrs (at 15 min/resolved issue) |
@@ -511,6 +559,27 @@ $DB_TIER_TABLE
 | Date | Stale Security | Stale Routine | Delta |
 |------|----------------|---------------|-------|
 $DB_TREND_TABLE
+DASHBOARD_EOF
+fi
+
+if [ "$HAS_DOC_DRIFT" = true ]; then
+  cat >> "$TMPDIR/automation-health.md" << DASHBOARD_EOF
+
+## $DOC_DRIFT_HEADING
+
+| Metric | Value |
+|--------|-------|
+| Repos scanned | $DD_REPOS_SCANNED |
+| Open corrections | $DD_CORRECTIONS |
+| Open additions | $DD_ADDITIONS |
+| Issues created (cumulative) | $DD_ISSUES_CREATED |
+| Issues closed (cumulative) | $DD_ISSUES_CLOSED |
+
+### Trend (last 10 scans)
+
+| Date | Corrections | Additions | Delta |
+|------|-------------|-----------|-------|
+$DD_TREND_TABLE
 DASHBOARD_EOF
 fi
 

@@ -5,3 +5,5 @@
 # Includes the atomic-write transient so an interrupted write cannot be committed.
 skills/*/scripts/_meta.*.json
 skills/*/scripts/_meta.*.json.tmp.*
+automation-work/
+.cursor/

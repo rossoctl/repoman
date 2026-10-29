@@ -19,13 +19,17 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$SRC" ] && [ -n "$DEST" ] || { echo "ERROR: --source and --dest are required" >&2; exit 2; }
 
-# The 23 engine scripts. Flat set: nearly all source program-lib.sh,
+# The 26 engine shell scripts. Flat set: nearly all source program-lib.sh,
 # which sources core.sh/github-api.sh/fork.sh/org.sh/repoman-requirements.sh.
 MANIFEST="automation-health-dashboard core dep-bump-fixer dep-bump-scanner \
+doc-drift-fixer doc-drift-precheck doc-drift-scanner \
 extract-broken-links fork github-api link-health-fixer link-health-scanner \
 org parse-diff-map pr-review-fixer pr-review-impact pr-review-lib \
 pr-review-scanner program-lib repo-sync repoman-check repoman-index \
 repoman-requirements repoman-run repoman-setup weekly-report"
+
+# Non-shell engine files copied alongside the manifest (explicit, no glob).
+EXTRA_FILES="doc-drift-check.py"
 
 # Pre-validate the WHOLE manifest before copying anything, so a source missing
 # late in the list cannot leave a half-vendored dest with a stale _vendor.json.
@@ -33,6 +37,12 @@ repoman-requirements repoman-run repoman-setup weekly-report"
 for f in $MANIFEST; do
   if [ ! -f "$SRC/scripts/$f.sh" ]; then
     echo "ERROR: missing engine source: $SRC/scripts/$f.sh (nothing copied)" >&2; exit 1
+  fi
+done
+# shellcheck disable=SC2086
+for f in $EXTRA_FILES; do
+  if [ ! -f "$SRC/scripts/$f" ]; then
+    echo "ERROR: missing engine source: $SRC/scripts/$f (nothing copied)" >&2; exit 1
   fi
 done
 
@@ -43,6 +53,12 @@ for f in $MANIFEST; do
     echo "ERROR: copy failed for $f.sh" >&2; exit 1
   fi
 done
+# shellcheck disable=SC2086
+for f in $EXTRA_FILES; do
+  if ! cp "$SRC/scripts/$f" "$DEST/$f"; then
+    echo "ERROR: copy failed for $f" >&2; exit 1
+  fi
+done
 
 # Provenance stamp: record the SOURCE repo's HEAD sha (not the dest repo's).
 if ! SHA=$(git -C "$SRC" rev-parse HEAD 2>/dev/null); then
@@ -51,7 +67,10 @@ fi
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # word-splitting $MANIFEST into one line per script is intentional
 # shellcheck disable=SC2086
-if ! FILES_JSON=$(printf '%s\n' $MANIFEST | sed 's/$/.sh/' | jq -R . | jq -s .); then
+if ! FILES_JSON=$( {
+  printf '%s\n' $MANIFEST | sed 's/$/.sh/'
+  printf '%s\n' $EXTRA_FILES
+} | jq -R . | jq -s .); then
   echo "ERROR: could not build file list" >&2; exit 1
 fi
 if ! jq -n --arg repo "rossoctl/automation" --arg sha "$SHA" --arg at "$NOW" \
@@ -61,4 +80,5 @@ if ! jq -n --arg repo "rossoctl/automation" --arg sha "$SHA" --arg at "$NOW" \
   echo "ERROR: provenance stamp write failed" >&2; exit 1
 fi
 
-echo "Vendored $(echo "$MANIFEST" | wc -w | tr -d ' ') engine scripts to $DEST (source $SHA)"
+# shellcheck disable=SC2086
+echo "Vendored $(echo $MANIFEST | wc -w | tr -d ' ') engine scripts (+ extras) to $DEST (source $SHA)"

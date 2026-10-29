@@ -66,6 +66,16 @@
       ]
     },
     {
+      "name": "doc-drift",
+      "description": "Detect documentation drift against a pinned git boundary and draft Keep a Changelog notes from merged PRs",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/doc-drift-scanner",
+        "./skills/doc-drift-fixer"
+      ]
+    },
+    {
       "name": "repoman",
       "description": "The RepoMan entrypoint: first-time setup, enabling a program, enrolling repos or an org, or running a program across enrolled repos. A single intent-dispatching skill.",
       "source": "./",
@@ -79,7 +89,9 @@
         "./skills/github-pr-review",
         "./skills/repo-sync",
         "./skills/automation-health-dashboard",
-        "./skills/github-weekly-report"
+        "./skills/github-weekly-report",
+        "./skills/doc-drift-scanner",
+        "./skills/doc-drift-fixer"
       ]
     }
   ]

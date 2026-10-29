@@ -1,12 +1,15 @@
 {
   "source_repo": "rossoctl/automation",
-  "source_sha": "0311752eba5350c74b8c9650137d3e6da65bd547",
-  "vendored_at": "2026-10-23T03:46:40Z",
+  "source_sha": "ecdc68577aa66e7959a4741b45ada741eac6cba2",
+  "vendored_at": "2026-10-29T17:53:18Z",
   "files": [
     "automation-health-dashboard.sh",
     "core.sh",
     "dep-bump-fixer.sh",
     "dep-bump-scanner.sh",
+    "doc-drift-fixer.sh",
+    "doc-drift-precheck.sh",
+    "doc-drift-scanner.sh",
     "extract-broken-links.sh",
     "fork.sh",
     "github-api.sh",
@@ -25,6 +28,7 @@
     "repoman-requirements.sh",
     "repoman-run.sh",
     "repoman-setup.sh",
-    "weekly-report.sh"
+    "weekly-report.sh",
+    "doc-drift-check.py"
   ]
 }

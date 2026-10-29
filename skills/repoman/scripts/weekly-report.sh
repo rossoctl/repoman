@@ -83,10 +83,6 @@ if [ ! -f "$REPORT_PY" ]; then
   exit 1
 fi
 
-# Pin provenance (6a) and append that exact line to the report that gets posted.
-# report.py stays footer-free so this is the only attribution line.
-SKILL_FOOTER=$(skill_attribution "github-weekly-report")
-
 # Build args. $repos is intentionally unquoted so each owner/name line becomes a
 # separate --repos value; repo slugs never contain whitespace. No --org: the
 # enrolled set can span owners, so each entry is owner-qualified and report.py
@@ -98,10 +94,4 @@ set -- --repos $repos
 [ -n "$OUTPUT" ] && set -- "$@" --output "$OUTPUT"
 [ -n "$JSON_OUTPUT" ] && set -- "$@" --json-output "$JSON_OUTPUT"
 
-python3 "$REPORT_PY" "$@"
-
-if [ -n "$OUTPUT" ]; then
-  printf '\n%s\n' "$SKILL_FOOTER" >> "$OUTPUT"
-else
-  printf '\n%s\n' "$SKILL_FOOTER"
-fi
+exec python3 "$REPORT_PY" "$@"

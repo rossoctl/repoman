@@ -404,9 +404,12 @@ if [ "$HAS_DOC_DRIFT" = true ]; then
   DD_REPOS_SCANNED=$(jq '.repos_scanned // 0' "$DOC_DRIFT_DIR/latest.json")
   DD_CORRECTIONS=$(jq '.corrections // ([.findings[]? | select(.kind=="correction")] | length)' "$DOC_DRIFT_DIR/latest.json")
   DD_ADDITIONS=$(jq '.additions // ([.findings[]? | select(.kind=="addition")] | length)' "$DOC_DRIFT_DIR/latest.json")
+  # Prefer .new/.fixed (emitted by doc-drift-scanner.sh); fall back to 0 so
+  # older history rows without those keys still render a numeric Delta.
   DD_TREND_TABLE=$(jq -r '
     .[-10:] | reverse | .[] |
-    "| \(.date | split("T")[0]) | \(.corrections // 0) | \(.additions // 0) | \(if .new > .fixed then "+\(.new - .fixed)" elif .new < .fixed then "\(.new - .fixed)" else "0" end) |"
+    (.new // 0) as $n | (.fixed // 0) as $f |
+    "| \(.date | split("T")[0]) | \(.corrections // 0) | \(.additions // 0) | \(if $n > $f then "+\($n - $f)" elif $n < $f then "\($n - $f)" else "0" end) |"
   ' "$DOC_DRIFT_DIR/history.json" 2>/dev/null || echo "| - | - | - | - |")
 fi
 

@@ -35,9 +35,13 @@ BACKTICK_PATH = re.compile(r"`([A-Za-z0-9_./\-]+(?:\.[A-Za-z0-9]+)?)`")
 MD_LINK_PATH = re.compile(r"\[[^\]]*\]\((?!https?://|#|mailto:)([A-Za-z0-9_./\-]+)\)")
 # Flag / long option
 FLAG_RE = re.compile(r"(?<![A-Za-z0-9_-])(--[A-Za-z0-9][A-Za-z0-9-]*)")
-# Subcommand-ish tokens after a script name mention
-SUBCMD_DOC_RE = re.compile(
-    r"(?:subcommands?|commands?)\s*:\s*([^\n]+)", re.I
+# Subcommand header on a line (same-line tokens optional; bullets may follow).
+SUBCMD_HEADER_RE = re.compile(
+    r"^(?P<pre>\s*(?:#\s*)?)(?:subcommands?|commands?)\s*:\s*(?P<rest>.*)$",
+    re.I,
+)
+_SUBCMD_STOPWORDS = frozenset(
+    {"subcommand", "subcommands", "commands", "command"}
 )
 # Keep a Changelog heading
 CHANGELOG_HEADING = re.compile(
@@ -191,13 +195,28 @@ def _parse_scalar(s: str) -> Any:
     return s
 
 
+def _next_significant_line(lines: Sequence[str], start: int) -> Optional[str]:
+    """Return the next non-blank, non-comment line at or after start, or None."""
+    for j in range(start, len(lines)):
+        cand = lines[j]
+        if not cand.strip() or cand.lstrip().startswith("#"):
+            continue
+        return cand
+    return None
+
+
 def parse_simple_yaml(text: str) -> Dict[str, Any]:
-    """Parse the narrow YAML subset used by doc-drift config."""
+    """Parse the narrow YAML subset used by doc-drift config.
+
+    List-vs-map for a bare ``key:`` is decided structurally: if the next
+    significant line is a ``- `` item at deeper indent, the value is a list;
+    otherwise it is a map. No hard-coded key names.
+    """
     root: Dict[str, Any] = {}
     stack: List[Tuple[int, Any]] = [(-1, root)]
-    pending_key: Optional[str] = None
+    lines = text.splitlines()
 
-    for raw in text.splitlines():
+    for i, raw in enumerate(lines):
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         indent = len(raw) - len(raw.lstrip(" "))
@@ -210,14 +229,11 @@ def parse_simple_yaml(text: str) -> Dict[str, Any]:
         if line.startswith("- "):
             item_text = line[2:].strip()
             if not isinstance(parent, list):
-                # Convert last pending into list if needed — shouldn't happen
                 continue
             if ":" in item_text and not item_text.startswith("{"):
-                # map item: { name: x, replace_with: y } or key: value pairs
                 if item_text.startswith("{") and item_text.endswith("}"):
                     parent.append(_parse_flow_map(item_text))
                 else:
-                    # single key: value on the dash line → start a map
                     k, _, v = item_text.partition(":")
                     obj: Dict[str, Any] = {k.strip(): _parse_scalar(v)}
                     parent.append(obj)
@@ -235,20 +251,17 @@ def parse_simple_yaml(text: str) -> Dict[str, Any]:
             if not isinstance(parent, dict):
                 continue
             if val == "":
-                # Look ahead is hard; create list or dict based on next lines —
-                # default to dict, promote later via dash detection using a marker
-                # Heuristic: sources_of_truth / retired_names / ignore_paths → list
-                if key in (
-                    "sources_of_truth",
-                    "retired_names",
-                    "ignore_paths",
-                    "docs",
-                ):
-                    parent[key] = []
-                    stack.append((indent, parent[key]))
+                nxt = _next_significant_line(lines, i + 1)
+                if nxt is not None:
+                    nxt_indent = len(nxt) - len(nxt.lstrip(" "))
+                    if nxt_indent > indent and nxt.lstrip().startswith("- "):
+                        parent[key] = []
+                        stack.append((indent, parent[key]))
+                    else:
+                        parent[key] = {}
+                        stack.append((indent, parent[key]))
                 else:
                     parent[key] = {}
-                    stack.append((indent, parent[key]))
             elif val.startswith("[") and val.endswith("]"):
                 inner = val[1:-1].strip()
                 if not inner:
@@ -435,17 +448,65 @@ def extract_script_tokens(script_text: str) -> Set[str]:
     return tokens
 
 
+def _add_subcommand_token(subs: Set[str], tok: str) -> None:
+    if tok and tok.lower() not in _SUBCMD_STOPWORDS:
+        subs.add(tok)
+
+
+def extract_listed_subcommands(text: str) -> Set[str]:
+    """Collect subcommand tokens from a Subcommands:/Commands: list.
+
+    Accepts same-line tokens and subsequent indented ``- item`` bullets (with
+    optional backticks), so multi-line docs are not silently skipped.
+    """
+    subs: Set[str] = set()
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = SUBCMD_HEADER_RE.match(line)
+        if not m:
+            continue
+        rest = (m.group("rest") or "").strip()
+        if rest:
+            for tok in re.findall(r"[A-Za-z][A-Za-z0-9_-]*", rest):
+                _add_subcommand_token(subs, tok)
+        base_indent = len(line) - len(line.lstrip(" "))
+        for j in range(i + 1, len(lines)):
+            nxt = lines[j]
+            if not nxt.strip():
+                continue
+            nindent = len(nxt) - len(nxt.lstrip(" "))
+            stripped = nxt.strip()
+            # Markdown often puts "- item" at the same column as "Subcommands:".
+            # Accept dash items at indent >= header; stop on other content at
+            # indent <= header (a new section).
+            if stripped.startswith("- "):
+                if nindent < base_indent:
+                    break
+                item = stripped[2:].strip()
+                for bt, plain in re.findall(
+                    r"`([^`]+)`|([A-Za-z][A-Za-z0-9_-]*)", item
+                ):
+                    _add_subcommand_token(subs, bt or plain)
+                continue
+            if nindent <= base_indent:
+                break
+            if stripped.startswith("#"):
+                continue
+            # "  foo --bar" style without a dash (must be indented past header)
+            m2 = re.match(r"^([a-z][a-z0-9-]*)\s+--", stripped)
+            if m2:
+                _add_subcommand_token(subs, m2.group(1))
+                continue
+            break
+    # Comment form: "#   foo --bar" without a Subcommands: header
+    for m in re.finditer(r"(?m)^#\s+([a-z][a-z0-9-]*)\s+--", text):
+        _add_subcommand_token(subs, m.group(1))
+    return subs
+
+
 def _header_subcommands(script_text: str) -> Set[str]:
     """Subcommands named in a leading comment / usage block."""
-    subs: Set[str] = set()
-    for m in SUBCMD_DOC_RE.finditer(script_text):
-        for tok in re.findall(r"[A-Za-z][A-Za-z0-9_-]*", m.group(1)):
-            if tok.lower() not in ("subcommand", "subcommands", "commands", "command"):
-                subs.add(tok)
-    # "Subcommands:\n  foo --bar" style in comments
-    for m in re.finditer(r"(?m)^#\s+([a-z][a-z0-9-]*)\s+--", script_text):
-        subs.add(m.group(1))
-    return subs
+    return extract_listed_subcommands(script_text)
 
 
 def _case_subcommands(script_text: str) -> Set[str]:
@@ -530,11 +591,7 @@ def check_flags(
                 continue
             parsed = extract_script_tokens(script_text)
             doc_flags = set(FLAG_RE.findall(text)) - META_FLAGS
-            doc_sub: Set[str] = set()
-            for m in SUBCMD_DOC_RE.finditer(text):
-                blob = m.group(1)
-                for tok in re.findall(r"[A-Za-z][A-Za-z0-9_-]*", blob):
-                    doc_sub.add(tok)
+            doc_sub = extract_listed_subcommands(text)
             for m in re.finditer(r"(?m)^\s{2,}([a-z][a-z0-9-]*)\s+--", text):
                 doc_sub.add(m.group(1))
 

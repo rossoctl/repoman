@@ -126,6 +126,26 @@ options and do **not** pick for the user:
 - **B — Setup only:** complete and confirm setup, then stop. The user
   re-invokes `/repoman` to run.
 
+## Startup banner
+
+On a human `/repoman` turn, print this header first, verbatim, in a fenced code block. Skip it when no human is in the turn: schedule/cron, headless `-p`, pipeline, or CI.
+
+```
+██████╗  ███████╗ ██████╗   ██████╗
+██╔══██╗ ██╔════╝ ██╔══██╗ ██╔═══██╗
+██████╔╝ █████╗   ██████╔╝ ██║   ██║
+██╔══██╗ ██╔══╝   ██╔═══╝  ██║   ██║
+██║  ██║ ███████╗ ██║      ╚██████╔╝
+╚═╝  ╚═╝ ╚══════╝ ╚═╝       ╚═════╝
+
+███╗   ███╗  █████╗  ███╗   ██╗
+████╗ ████║ ██╔══██╗ ████╗  ██║
+██╔████╔██║ ███████║ ██╔██╗ ██║
+██║╚██╔╝██║ ██╔══██║ ██║╚██╗██║
+██║ ╚═╝ ██║ ██║  ██║ ██║ ╚████║
+╚═╝     ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝
+```
+
 ## Welcome orientation (new-user acquisition)
 
 Whenever you reach a **no-intent branch** — a brand-new user with no setup, or a
@@ -166,6 +186,10 @@ they want in a follow-up turn.
 
 The orientation makes **no** `~/.repoman/` writes; it is pure presentation over
 inferred state.
+
+## Outbound footer
+
+Do not write your own footer. End a review body and its Slack post with the line from `pr-review-fixer.sh footer`. Leave a weekly report's attribution line as the script wrote it. Inline review comments stay footer-free.
 
 ## Presentation (naming, pacing, and choice UI)
 

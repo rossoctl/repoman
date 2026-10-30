@@ -142,6 +142,8 @@ The cron job runs weekly on Mondays at 05:01 UTC. The agent:
 4. Closes previous weekly report issues
 5. Posts the final report as a new GitHub issue
 
+Do not append a footer yourself. Leave any attribution line the report already has in place.
+
 ## See Also
 
 - GitHub CLI docs: https://cli.github.com/manual/

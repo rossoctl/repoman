@@ -470,7 +470,7 @@ step 1.
 
 ## Phase 5: Submit Review
 
-After user approves, post the review via GitHub API.
+After user approves, post the review via GitHub API. End the review body and its Slack post with the exact line from `pr-review-fixer.sh footer`. Inline comments do not get one.
 
 ### 5.1 Post Review with Inline Comments
 

@@ -236,21 +236,6 @@ PY
         done < <(git grep -l -I "$old_tok" -- '*.md' '*.rst' '*.txt' 2>/dev/null || true)
       fi
       ;;
-    enumerations|paths)
-      echo "  INFO: $check correction needs a unique replacement; checklist only if ambiguous"
-      # Enum/path mechanical only when replace_with or draft provides the token
-      if [ -z "$replace" ] && [ -z "$(printf '%s' "$finding" | jq -r '.draft // empty')" ]; then
-        continue
-      fi
-      cd "$repo_dir" || continue
-      ensure_fork "$org" "$repo_name" "$FORK_OWNER"
-      FORK_REMOTE="${FORK_OWNER}-${repo_name}-fork"
-      if ! git remote get-url "$FORK_REMOTE" >/dev/null 2>&1; then
-        git remote add "$FORK_REMOTE" "https://github.com/$FORK_OWNER/${repo_name}.git"
-      fi
-      git fetch "$FORK_REMOTE" main 2>/dev/null || true
-      git checkout -B "$branch" "$FORK_REMOTE/main" 2>/dev/null || git checkout -B "$branch"
-      ;;
     *)
       echo "  INFO: no mechanical edit path for check=$check"
       continue

@@ -231,13 +231,10 @@ def parse_simple_yaml(text: str) -> Dict[str, Any]:
             if not isinstance(parent, list):
                 continue
             if ":" in item_text and not item_text.startswith("{"):
-                if item_text.startswith("{") and item_text.endswith("}"):
-                    parent.append(_parse_flow_map(item_text))
-                else:
-                    k, _, v = item_text.partition(":")
-                    obj: Dict[str, Any] = {k.strip(): _parse_scalar(v)}
-                    parent.append(obj)
-                    stack.append((indent, obj))
+                k, _, v = item_text.partition(":")
+                obj: Dict[str, Any] = {k.strip(): _parse_scalar(v)}
+                parent.append(obj)
+                stack.append((indent, obj))
             elif item_text.startswith("{") and item_text.endswith("}"):
                 parent.append(_parse_flow_map(item_text))
             else:
@@ -395,15 +392,10 @@ def check_paths(
                         candidates.append(f"{doc_dir}/{raw}")
                 else:
                     candidates.append(raw.lstrip("/"))
-                exists = any(c in tree or c.rstrip("/") + "/" in {p + "/" for p in tree} or any(
-                    p.startswith(c.rstrip("/") + "/") for p in tree
-                ) for c in candidates)
-                # Also accept directory existence via any file under it
-                if not exists:
-                    for c in candidates:
-                        if any(p == c or p.startswith(c.rstrip("/") + "/") for p in tree):
-                            exists = True
-                            break
+                exists = any(
+                    any(p == c.rstrip("/") or p.startswith(c.rstrip("/") + "/") for p in tree)
+                    for c in candidates
+                )
                 if exists:
                     continue
                 findings.append(
@@ -806,11 +798,13 @@ def check_versions(
         if "marketplace" in path:
             canon_ver, canon_path, canon_line = trip
             break
+    # When the boundary is a stable tag, that tag is the version users run.
     if boundary_label.startswith("v") and re.match(r"^v\d+\.\d+\.\d+$", boundary_label):
         tag_ver = boundary_label[1:]
         if tag_ver != canon_ver:
-            # Prefer tag as boundary truth when boundary=tags
-            pass
+            canon_ver = tag_ver
+            canon_path = f"tag:{boundary_label}"
+            canon_line = 1
     for doc_path, text in docs:
         if os.path.basename(doc_path).upper() == "CHANGELOG.md":
             continue

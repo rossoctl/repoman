@@ -189,7 +189,7 @@ inferred state.
 
 ## Outbound footer
 
-Do not append a footer yourself. Program scripts add the attribution line. Inline review comments stay footer-free.
+Do not write your own footer. End a review body and its Slack post with the line from `pr-review-fixer.sh footer`. Leave a weekly report's attribution line as the script wrote it. Inline review comments stay footer-free.
 
 ## Presentation (naming, pacing, and choice UI)
 

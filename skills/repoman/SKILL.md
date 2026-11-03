@@ -166,7 +166,7 @@ state so it never lies about what is installed:
    one-line description read from the program's `SKILL.md` (the same source the
    gate uses; use the program→skill-dir map above). The authoritative backend
    names remain the `KNOWN_PROGRAMS` allowlist in `repoman-setup.sh`
-   (`link-health`, `dep-bump`, `pr-review`, `automation-health`, `repo-sync`) —
+   (`link-health`, `dep-bump`, `pr-review`, `automation-health`, `repo-sync`, `doc-drift`) —
    show the friendly names to the user, resolve back to the canonical token
    before any writer call. The description in each `SKILL.md` frontmatter is
    usually a YAML **folded block scalar** (`description: >-` with the text on the

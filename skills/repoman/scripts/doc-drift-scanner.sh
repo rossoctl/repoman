@@ -59,6 +59,7 @@ if [ "$ISSUE_LIMIT" -gt 0 ]; then echo "Issue limit: $ISSUE_LIMIT"; fi
 ENROLLED=$(repoman_load_enrolled) || exit 1
 CLONES=$(enrolled_clone_dirs "$ENROLLED")
 : > "$PROGRAM_TMPDIR/current.jsonl"
+: > "$PROGRAM_TMPDIR/failed_repos.txt"
 REPOS_SCANNED=0
 REPOS_FAILED=0
 REPOS_TOUCHED=0
@@ -85,9 +86,9 @@ fetch_release_meta() {
     echo "]"
   } > "$rel_json" 2>/dev/null || echo "[]" > "$rel_json"
 
+  # The checker decides unreleased from mergedAt vs the newest publishedAt.
   gh pr list --repo "$full_repo" --state merged --limit 100 \
-    --json number,title,url,labels,mergedAt 2>/dev/null \
-    | jq '[.[] | . + {unreleased: true}]' > "$prs_json" 2>/dev/null \
+    --json number,title,url,labels,mergedAt > "$prs_json" 2>/dev/null \
     || echo "[]" > "$prs_json"
 }
 
@@ -103,6 +104,7 @@ while IFS= read -r full_repo; do
   if ! out=$(python3 "$CHECK_PY" --clone "$repo_dir" --repo "$full_repo" \
       --releases-json "$rel_json" --prs-json "$prs_json"); then
     echo "  WARN: checker failed for $full_repo"
+    echo "$full_repo" >> "$PROGRAM_TMPDIR/failed_repos.txt"
     REPOS_FAILED=$((REPOS_FAILED + 1))
     continue
   fi
@@ -124,7 +126,19 @@ else
   : > "$PREV"
 fi
 
-KEY_EXPR='.key // ([.repo, .check, .doc_path, .claim, .code_path] | join("|"))'
+KEY_EXPR='.key // ([.repo, .check, .doc_path, .claim, .code_path, (.doc_line | tostring)] | join("|"))'
+
+# A failed checker leaves no rows. Carry the previous findings for that
+# repo so the rollup issue stays open and the next scan does not report
+# them as new.
+if [ -s "$PROGRAM_TMPDIR/failed_repos.txt" ]; then
+  while IFS= read -r failed_repo; do
+    [ -n "$failed_repo" ] || continue
+    jq -c --arg r "$failed_repo" 'select(.repo == $r)' "$PREV" \
+      >> "$PROGRAM_TMPDIR/current.jsonl" 2>/dev/null || true
+  done < "$PROGRAM_TMPDIR/failed_repos.txt"
+fi
+
 read -r NEW_COUNT FIXED_COUNT RECURRING_COUNT < <(diff_against_previous \
   "$PROGRAM_TMPDIR/current.jsonl" "$PREV" "$KEY_EXPR")
 echo "New: $NEW_COUNT  Fixed: $FIXED_COUNT  Recurring: $RECURRING_COUNT"

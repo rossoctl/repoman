@@ -81,8 +81,8 @@ while IFS= read -r finding; do
         || echo "[]" > "$PROGRAM_TMPDIR/rel_${safe}.json"
     fi
     gh pr list --repo "$repo" --state merged --limit 100 \
-      --json number,title,url,labels,mergedAt 2>/dev/null \
-      | jq '[.[] | . + {unreleased: true}]' > "$PROGRAM_TMPDIR/prs_${safe}.json" 2>/dev/null \
+      --json number,title,url,labels,mergedAt \
+      > "$PROGRAM_TMPDIR/prs_${safe}.json" 2>/dev/null \
       || echo "[]" > "$PROGRAM_TMPDIR/prs_${safe}.json"
   fi
 
@@ -127,27 +127,36 @@ echo "Mechanical corrections: $(wc -l < "$PROGRAM_TMPDIR/mech_corr.jsonl" | tr -
 echo "Mechanical additions:   $(wc -l < "$PROGRAM_TMPDIR/mech_add.jsonl" | tr -d ' ')"
 echo "Non-mechanical:         $(wc -l < "$PROGRAM_TMPDIR/non_mech.jsonl" | tr -d ' ')"
 
-apply_replace() {
-  local file="$1" old="$2" new="$3"
+# Edit one line of one file. Word-ish boundaries so 1.2.3 does not match
+# inside 11.2.34, and a miss leaves the file untouched.
+replace_on_line() {
+  local file="$1" line_no="$2" old="$3" new="$4"
   if [ ! -f "$file" ]; then
     echo "  WARN: missing $file"
     return 1
   fi
-  # Prefer python for literal replace (no sed metachar surprises)
-  python3 - "$file" "$old" "$new" <<'PY'
-import sys
-path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
-text = open(path, encoding="utf-8").read()
-if old not in text:
-    # try case-insensitive for retired names
-    import re
-    text2, n = re.subn(re.escape(old), new, text, flags=re.I)
-    if n == 0:
-        sys.exit(2)
-    open(path, "w", encoding="utf-8").write(text2)
-else:
-    open(path, "w", encoding="utf-8").write(text.replace(old, new))
+  python3 - "$file" "$line_no" "$old" "$new" <<'PY'
+import re, sys
+path, line_no, old, new = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+lines = open(path, encoding="utf-8").read().splitlines(keepends=True)
+idx = line_no - 1
+if idx < 0 or idx >= len(lines):
+    sys.exit(2)
+pat = re.compile(r"(?<![A-Za-z0-9.])" + re.escape(old) + r"(?![A-Za-z0-9.])")
+updated, n = pat.subn(new, lines[idx], count=1)
+if n != 1:
+    sys.exit(2)
+lines[idx] = updated
+open(path, "w", encoding="utf-8").write("".join(lines))
 PY
+}
+
+restore_main() {
+  if [ -d "$(git rev-parse --git-path rebase-merge)" ] \
+    || [ -d "$(git rev-parse --git-path rebase-apply)" ]; then
+    git rebase --abort || true
+  fi
+  git checkout --force main 2>/dev/null || true
 }
 
 # --- Mechanical corrections: one PR each ---
@@ -210,7 +219,8 @@ PY
       fi
       ;;
     versions|retired_names)
-      # Grep the claim token across the repo and replace
+      # Edit only the flagged line. A repo-wide replace rewrites changelog
+      # history and dependency pins that happen to contain the same token.
       cd "$repo_dir" || continue
       ensure_fork "$org" "$repo_name" "$FORK_OWNER"
       FORK_REMOTE="${FORK_OWNER}-${repo_name}-fork"
@@ -229,11 +239,15 @@ PY
       if [ -z "$old_tok" ]; then
         old_tok=$(printf '%s' "$claim" | sed -n 's/.*`\([^`]*\)`.*/\1/p')
       fi
-      if [ -n "$old_tok" ]; then
-        while IFS= read -r f; do
-          [ -n "$f" ] || continue
-          apply_replace "$f" "$old_tok" "$replace" && git add "$f" || true
-        done < <(git grep -l -I "$old_tok" -- '*.md' '*.rst' '*.txt' 2>/dev/null || true)
+      doc_line=$(printf '%s' "$finding" | jq -r '.doc_line // 0')
+      if [ -n "$old_tok" ] && [ -n "$doc_path" ]; then
+        if replace_on_line "$doc_path" "$doc_line" "$old_tok" "$replace"; then
+          git add "$doc_path"
+        else
+          echo "  WARN: no edit at $doc_path:$doc_line"
+          restore_main
+          continue
+        fi
       fi
       ;;
     *)
@@ -299,10 +313,20 @@ for repo in $repos_add; do
     git remote add "$FORK_REMOTE" "https://github.com/$FORK_OWNER/${repo_name}.git"
   fi
   git fetch "$FORK_REMOTE" 2>/dev/null || true
-  # Rebase/extend existing rolling branch if present
+  # Rebuild onto the fork's main. A failed rebase must not leave the shared
+  # clone mid-rebase (repo-sync and the other scanners read it).
   if git fetch "$FORK_REMOTE" "$branch" 2>/dev/null; then
-    git checkout -B "$branch" "$FORK_REMOTE/$branch"
-    git rebase "$FORK_REMOTE/main" 2>/dev/null || true
+    if ! git checkout -B "$branch" "$FORK_REMOTE/$branch"; then
+      echo "  WARN: could not check out $branch"
+      restore_main
+      continue
+    fi
+    if ! git rebase "$FORK_REMOTE/main"; then
+      echo "  WARN: rebase onto $FORK_REMOTE/main failed; aborting"
+      git rebase --abort || true
+      restore_main
+      continue
+    fi
   else
     git checkout -B "$branch" "$FORK_REMOTE/main" 2>/dev/null || git checkout -B "$branch"
   fi
@@ -371,7 +395,9 @@ $SKILL_FOOTER"
   git commit -s -m "docs: doc-drift updates
 
 Automated update by RepoMan Doc-Drift Fixer ($FIX_DATE)." || true
-  git push "$FORK_REMOTE" "$branch" 2>/dev/null || {
+  # Rebase rewrites the rolling branch, so a plain push is rejected once
+  # the fork's main has moved. Lease the remote tip we just fetched.
+  git push --force-with-lease "$FORK_REMOTE" "$branch" 2>/dev/null || {
     echo "  WARN: push failed"
     git checkout main 2>/dev/null || true
     continue

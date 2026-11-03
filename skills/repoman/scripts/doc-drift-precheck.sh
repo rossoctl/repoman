@@ -76,10 +76,9 @@ while IFS= read -r full_repo; do
         --jq '.[].tagName' 2>/dev/null || true)
       echo "]"
     } > "$rel_json" 2>/dev/null || echo "[]" > "$rel_json"
-    # Merged PRs after the newest stable tag → unreleased candidates.
+    # The checker classifies unreleased PRs from mergedAt vs publishedAt.
     gh pr list --repo "$full_repo" --state merged --limit 100 \
-      --json number,title,url,labels,mergedAt 2>/dev/null \
-      | jq '[.[] | . + {unreleased: true}]' > "$prs_json" 2>/dev/null \
+      --json number,title,url,labels,mergedAt > "$prs_json" 2>/dev/null \
       || echo "[]" > "$prs_json"
   fi
 

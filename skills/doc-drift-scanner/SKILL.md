@@ -79,12 +79,19 @@ date/draft when GitHub metadata is supplied).
 
 ## Precheck (DAM schedules)
 
+`--worklist` is required. Pass a persistent path. The script's default path
+sits in a temp directory that is removed on exit, so a bare run prints a
+`worklist:` path that is already gone.
+
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/doc-drift-precheck.sh"
+mkdir -p "${REPORTS_DIR:-$HOME/reports/doc-drift}"
+bash "${CLAUDE_PLUGIN_ROOT}/skills/repoman/scripts/doc-drift-precheck.sh" \
+  --worklist "${REPORTS_DIR:-$HOME/reports/doc-drift}/worklist.json"
 ```
 
 Exit `1` when the worklist is empty (skip the model turn). Exit `0` and print
-`worklist: <path>` when there is work. Any other exit is fail-open.
+`worklist: <path>` when there is work. Any other exit is fail-open. Read the
+file at the `--worklist` path you passed; do not use the script's default.
 
 ## Related
 

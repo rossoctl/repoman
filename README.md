@@ -63,12 +63,59 @@ adding the marketplace to browse the authoritative list.
 
 Individual programs may have additional requirements documented in their `SKILL.md`.
 
-## How it is built
+## Development
 
-The engine scripts are vendored from [rossoctl/automation](https://github.com/rossoctl/automation)
-(the development source of truth) into this distribution repo, with a provenance stamp
-(`skills/repoman/scripts/_vendor.json`) recording the exact source commit. See the
-`CHANGELOG.md` for release history.
+RepoMan is developed across three repositories:
+
+| Repository | Role |
+|------------|------|
+| [rossoctl/automation](https://github.com/rossoctl/automation) | Engine source of truth: the flat scripts in `scripts/`, plus tests and specs. All engine changes are made and tested here first. |
+| [rossoctl/agent-skills](https://github.com/rossoctl/agent-skills) | Skills designed to work standalone as well as with RepoMan. |
+| [rossoctl/repoman](https://github.com/rossoctl/repoman) (this repo) | Distribution (`rossoctl-repoman` marketplace) and the canonical home for RepoMan-specific `SKILL.md`s. The engine is not authored here. |
+
+See the `CHANGELOG.md` for release history.
+
+### Contributor workflow
+
+1. **Place the work.** A skill that is useful on its own → author it in
+   agent-skills. A RepoMan-specific program (keeps state under `~/.repoman`) →
+   deterministic scripts in automation, `SKILL.md` in this repo. New programs
+   start from automation's `docs/program-template.md`.
+2. **Test in automation**, next to the existing tests in `tests/`. Bash 3.2
+   only: no `mapfile`, no associative arrays, BSD fallbacks for GNU-only
+   flags. If the skill writes to `~/.repoman`, give its `SKILL.md` a
+   machine-readable `### Requirements` block so `repoman-check.sh` can gate
+   the run.
+3. **Keep real state out of test runs.** Point `REPOMAN_CONFIG_FILE` /
+   `REPOMAN_REPOS_FILE` at scratch files; never hand-edit `~/.repoman`
+   (`repoman-setup.sh` is its only writer); drive first runs through
+   `repoman-run.sh <program> owner/repo --dry-run` and drop `--dry-run` only
+   once the output looks right.
+4. **Vendor the engine** into this repo (below) — a new engine script must be
+   added to the vendor manifest — then run `tests/test-vendor-engine.sh`. To
+   try the plugin without reinstalling from the marketplace:
+   `claude --plugin-dir <this-repo>`.
+5. **Before the PR**: `git config core.hooksPath scripts/hooks`, sign off
+   with `git commit -s` (DCO), use a conventional title, one purpose per PR.
+
+### Vendoring the engine
+
+`skills/repoman/scripts/` is **generated output** — a vendored copy of the
+automation engine, stamped with its source commit in
+[`_vendor.json`](skills/repoman/scripts/_vendor.json). Never edit those files
+directly: an in-place fix bypasses automation's tests and is silently
+overwritten on the next vendor. To pick up engine changes, from a checkout of
+this repo:
+
+```bash
+scripts/vendor-engine.sh --source <path-to-automation-checkout> \
+  --dest skills/repoman/scripts
+```
+
+The script copies an explicit manifest (never a glob, so it cannot touch the
+standalone skills' own `scripts/`), pre-validates the whole manifest before
+copying anything, and rewrites `_vendor.json` with the automation HEAD SHA it
+vendored from. `tests/test-vendor-engine.sh` is its regression test.
 
 ## License
 

@@ -45,6 +45,31 @@ This applies to:
 - Commit message trailers referenced in PR descriptions
 - Any auto-generated changelogs or release notes
 
+## Repo Topology & Vendored Code (Read Before Editing)
+
+This repo **distributes** RepoMan; it is not where the engine is developed.
+
+- Engine scripts are developed and tested in
+  [rossoctl/automation](https://github.com/rossoctl/automation) `scripts/`.
+  Engine changes are made there, then vendored here.
+- `skills/repoman/scripts/*.sh` are **vendored copies** — generated output,
+  provenance-stamped in `skills/repoman/scripts/_vendor.json`. **Never edit
+  them in place.** To update them, run
+  `scripts/vendor-engine.sh --source <automation-checkout> --dest skills/repoman/scripts`
+  from a checkout of automation that has your fix.
+- RepoMan-specific skills are canonical **here**: their `SKILL.md`s are
+  authored in this repo.
+  [rossoctl/agent-skills](https://github.com/rossoctl/agent-skills) hosts
+  skills designed to work standalone as well as with RepoMan — do not port
+  RepoMan skill docs there.
+- The per-program `skills/<program>/scripts/` copies are known-stale relative
+  to automation's engine (resync tracked in
+  [#5](https://github.com/rossoctl/repoman/issues/5)).
+  Do not treat either side as authoritative or copy between them piecemeal.
+- The full contributor workflow (placement, testing, dry runs, vendoring, PR
+  rules) is in the README's `## Development` section — read it before
+  changing anything here.
+
 ## Scope Discipline
 
 Only commit files directly related to the PR's stated purpose. Do not bundle

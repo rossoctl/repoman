@@ -80,7 +80,11 @@ See the `CHANGELOG.md` for release history.
 1. **Place the work.** A skill that is useful on its own → author it in
    agent-skills. A RepoMan-specific program (keeps state under `~/.repoman`) →
    deterministic scripts in automation, `SKILL.md` in this repo. New programs
-   start from automation's `docs/program-template.md`.
+   start from automation's `docs/program-template.md`. A new program also
+   needs repoman-side wiring that is not engine code: a
+   `.claude-plugin/marketplace.json` entry, a row in the README
+   `## Programs` table, and the program → skill mapping in
+   `skills/repoman/SKILL.md`.
 2. **Test in automation**, next to the existing tests in `tests/`. Bash 3.2
    only: no `mapfile`, no associative arrays, BSD fallbacks for GNU-only
    flags. If the skill writes to `~/.repoman`, give its `SKILL.md` a
@@ -92,9 +96,11 @@ See the `CHANGELOG.md` for release history.
    `repoman-run.sh <program> owner/repo --dry-run` and drop `--dry-run` only
    once the output looks right.
 4. **Vendor the engine** into this repo (below) — a new engine script must be
-   added to the vendor manifest — then run `tests/test-vendor-engine.sh`. To
-   try the plugin without reinstalling from the marketplace:
-   `claude --plugin-dir <this-repo>`.
+   added to both the vendor manifest and its test fixture in
+   `tests/test-vendor-engine.sh`, including the expected counts — then run
+   that test. To try the plugin without reinstalling from the marketplace:
+   `claude plugin marketplace add <this-repo>` then
+   `claude plugin install repoman@rossoctl-repoman`.
 5. **Before the PR**: `git config core.hooksPath scripts/hooks`, sign off
    with `git commit -s` (DCO), use a conventional title, one purpose per PR.
 
@@ -104,8 +110,10 @@ See the `CHANGELOG.md` for release history.
 automation engine, stamped with its source commit in
 [`_vendor.json`](skills/repoman/scripts/_vendor.json). Never edit those files
 directly: an in-place fix bypasses automation's tests and is silently
-overwritten on the next vendor. To pick up engine changes, from a checkout of
-this repo:
+overwritten on the next vendor. To pick up engine changes, run it from this
+repo against a **clean automation checkout** — the stamp records the source
+HEAD SHA, so vendoring uncommitted changes would produce a stamp that does not
+match the copied bytes:
 
 ```bash
 scripts/vendor-engine.sh --source <path-to-automation-checkout> \

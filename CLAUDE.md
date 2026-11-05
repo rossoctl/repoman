@@ -56,7 +56,7 @@ This repo **distributes** RepoMan; it is not where the engine is developed.
   provenance-stamped in `skills/repoman/scripts/_vendor.json`. **Never edit
   them in place.** To update them, run
   `scripts/vendor-engine.sh --source <automation-checkout> --dest skills/repoman/scripts`
-  from a checkout of automation that has your fix.
+  from a clean automation checkout that has your fix committed.
 - RepoMan-specific skills are canonical **here**: their `SKILL.md`s are
   authored in this repo.
   [rossoctl/agent-skills](https://github.com/rossoctl/agent-skills) hosts

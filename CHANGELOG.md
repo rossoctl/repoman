@@ -8,7 +8,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **doc-drift program.** The scanner and fixer compare documentation to the code at a pinned git ref (paths, flags, enumerations, retired names, versions, and absence claims) and draft Keep a Changelog notes from merged pull requests. It ships inside the `repoman` plugin and as its own marketplace plugin.
+- **doc-drift program.** The scanner and fixer compare documentation to the code at a pinned git ref (paths, flags, enumerations, retired names, versions, and absence claims) and draft Keep a Changelog notes from merged pull requests. It ships inside the `repoman` plugin and as its own marketplace plugin. (#12)
+- **REPOMAN banner** on interactive sessions. (#9)
 - **Shellcheck** for the vendor tooling (`scripts/vendor-engine.sh` and `tests/test-vendor-engine.sh`).
 
 ### Changed

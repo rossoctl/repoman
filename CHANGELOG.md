@@ -16,7 +16,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Marketplace version is `0.1.1`. The `v0.1.1` tag is cut from `main` after this release merges.
 - Bundled engine is vendored from `rossoctl/automation` `fa619090`, including the pinned-SHA footer for PR review and the weekly report.
 
-## [0.1.0] - 2026-10-23
+## [0.1.0] - 2026-10-27
 
 First tagged release of RepoMan, distributed through the `rossoctl-repoman`
 marketplace.

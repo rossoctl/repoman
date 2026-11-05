@@ -113,7 +113,8 @@ directly: an in-place fix bypasses automation's tests and is silently
 overwritten on the next vendor. To pick up engine changes, run it from this
 repo against a **clean automation checkout** — the stamp records the source
 HEAD SHA, so vendoring uncommitted changes would produce a stamp that does not
-match the copied bytes:
+match the copied bytes (the script rejects a dirty source unless
+`--allow-dirty` is passed):
 
 ```bash
 scripts/vendor-engine.sh --source <path-to-automation-checkout> \

@@ -53,6 +53,20 @@ bash "$VENDOR" --source "$SRC" --dest "$DEST" >/dev/null 2>&1
 got2=$(jq -r '.source_sha' "$DEST/_vendor.json" 2>/dev/null)
 if [ "$got2" = "$want" ]; then echo "PASS: idempotent stamp sha"; else echo "FAIL: idempotency $got2 != $want"; fail=1; fi
 
+# --- Dirty source: rejected before any copy, dest left uncreated ---
+DIRTYDEST="$TMP/dirtydest"
+echo x >> "$SRC/scripts/org.sh"   # uncommitted modification
+if bash "$VENDOR" --source "$SRC" --dest "$DIRTYDEST" >/dev/null 2>&1; then
+  echo "FAIL: dirty source was not rejected"; fail=1
+else echo "PASS: dirty source rejected"; fi
+if [ ! -d "$DIRTYDEST" ]; then echo "PASS: dirty rejection left dest uncreated"; else echo "FAIL: dirty rejection still created dest"; fail=1; fi
+# --- Dirty source with --allow-dirty: override works, stamp still stamped ---
+if bash "$VENDOR" --source "$SRC" --dest "$DIRTYDEST" --allow-dirty >/dev/null 2>&1; then
+  echo "PASS: --allow-dirty overrides the guard"
+else echo "FAIL: --allow-dirty did not override"; fail=1; fi
+if [ -f "$DIRTYDEST/org.sh" ]; then echo "PASS: --allow-dirty run copied files"; else echo "FAIL: --allow-dirty run copied nothing"; fail=1; fi
+git -C "$SRC" checkout -- scripts/org.sh   # restore for the tests below
+
 # --- Missing source fails loud AND leaves the dest empty (no half-vendored dir) ---
 BADDEST="$TMP/baddest"
 missing_source_fails() (

@@ -52,7 +52,8 @@ OPTIONS:
   --help, -h         Show this help
 
 ENVIRONMENT:
-  REPORT_PY          Path to report.py (default: the deployed report generator)
+  REPORT_PY          Path to report.py (default: first of the bundled generator
+                     beside this skill, then the $HOME/workspaces deploy path)
 
 PREREQUISITES:
   python3, gh (authenticated). The repo list comes from the RepoMan enrolled set
@@ -74,14 +75,31 @@ if [ -z "$repos" ]; then
   exit 1
 fi
 
-# Locate the generator. Default points at the deployed github-weekly-report skill
-# (the upstream skill name in agent-skills); override with REPORT_PY in dev.
-REPORT_PY="${REPORT_PY:-$HOME/workspaces/shared/skills/github-weekly-report/scripts/report.py}"
+# Locate the generator. When REPORT_PY is unset, try candidates in order and use
+# the first that exists, so both deployment layouts work with no per-host config:
+#   1. bundled  — the plugin layout, where github-weekly-report sits beside the
+#                 repoman skill (the self-contained install; the primary target).
+#   2. deployed — the OpenClaw host layout under $HOME/workspaces. Transitional:
+#                 the personal-path default is tracked for removal in #116, and
+#                 falls away entirely if OpenClaw deployment is retired.
+# If neither exists, keep the bundled path so the error names the expected location.
+if [ -z "${REPORT_PY:-}" ]; then
+  bundled="$SCRIPT_DIR/../../github-weekly-report/scripts/report.py"
+  deployed="${HOME:-}/workspaces/shared/skills/github-weekly-report/scripts/report.py"
+  for candidate in "$bundled" "$deployed"; do
+    if [ -f "$candidate" ]; then REPORT_PY="$candidate"; break; fi
+  done
+  REPORT_PY="${REPORT_PY:-$bundled}"
+fi
 if [ ! -f "$REPORT_PY" ]; then
   echo "Error: report generator not found at: $REPORT_PY" >&2
   echo "Set REPORT_PY to the path of report.py." >&2
   exit 1
 fi
+
+# Pin provenance and append that exact line to the report that gets posted.
+# Write _meta only after the SHA resolves; never overwrite a valid file.
+SKILL_FOOTER=$(skill_attribution "github-weekly-report")
 
 # Build args. $repos is intentionally unquoted so each owner/name line becomes a
 # separate --repos value; repo slugs never contain whitespace. No --org: the
@@ -94,4 +112,11 @@ set -- --repos $repos
 [ -n "$OUTPUT" ] && set -- "$@" --output "$OUTPUT"
 [ -n "$JSON_OUTPUT" ] && set -- "$@" --json-output "$JSON_OUTPUT"
 
-exec python3 "$REPORT_PY" "$@"
+python3 "$REPORT_PY" "$@"
+
+# --output: the posted artifact is the file. Otherwise the report is stdout.
+if [ -n "$OUTPUT" ]; then
+  printf '\n%s\n' "$SKILL_FOOTER" >> "$OUTPUT"
+else
+  printf '\n%s\n' "$SKILL_FOOTER"
+fi

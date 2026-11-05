@@ -76,6 +76,7 @@ on the left, skill dir on the right):
 | `pr-review` | `skills/github-pr-review/` |
 | `automation-health` | `skills/automation-health-dashboard/` |
 | `repo-sync` | `skills/repo-sync/` |
+| `doc-drift` | `skills/doc-drift-scanner/` |
 
 ## State-inference decision tree
 
@@ -165,7 +166,7 @@ state so it never lies about what is installed:
    one-line description read from the program's `SKILL.md` (the same source the
    gate uses; use the program→skill-dir map above). The authoritative backend
    names remain the `KNOWN_PROGRAMS` allowlist in `repoman-setup.sh`
-   (`link-health`, `dep-bump`, `pr-review`, `automation-health`, `repo-sync`) —
+   (`link-health`, `dep-bump`, `pr-review`, `automation-health`, `repo-sync`, `weekly-report`, `doc-drift`) —
    show the friendly names to the user, resolve back to the canonical token
    before any writer call. The description in each `SKILL.md` frontmatter is
    usually a YAML **folded block scalar** (`description: >-` with the text on the
@@ -211,6 +212,7 @@ does not resolve must never reach them.
 | PR-Review-Manager | `pr-review` |
 | Automation-Health-Manager | `automation-health` |
 | Repo-Sync-Manager | `repo-sync` |
+| Doc-Drift-Manager | `doc-drift` |
 
 Match user input leniently against this list: "pr review", "pr-review-manager",
 and "prmanager" all resolve to `pr-review`; "dep bump" → `dep-bump`. **Always**

@@ -1,7 +1,7 @@
 # RepoMan
 
 RepoMan runs automated maintenance **programs** (PR review, link health, dependency
-bumps, weekly reports, repo sync) across a set of GitHub repos you enroll once. It
+bumps, weekly reports, repo sync, doc drift) across a set of GitHub repos you enroll once. It
 handles the capability checks and output wiring for you, so you install once and
 enable programs on the fly.
 
@@ -49,6 +49,7 @@ The `repoman` bundle ships these programs, each ready to enable:
 | [repo-sync](skills/repo-sync/) | Keep local clones of enrolled repos current; read-only toward GitHub |
 | [automation-health](skills/automation-health-dashboard/) | Generate an executive-facing dashboard combining all program metrics |
 | [weekly-report](skills/github-weekly-report/) | Weekly org activity reports with merged PRs, CI health, and active-epic tracking |
+| [doc-drift](skills/doc-drift-scanner/) | Scan repos for documentation drift and draft changelog notes from merged PRs ([fixer](skills/doc-drift-fixer/) re-verifies and opens mechanical doc fix PRs) |
 
 Each program is also published as its own standalone plugin, for using one on its own
 (for example a one-off PR review) without the full RepoMan setup. Run `/plugin` after

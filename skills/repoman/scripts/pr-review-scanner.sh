@@ -58,6 +58,10 @@ USAGE
   exit 0
 fi
 
+# Pin provenance on startup: write _meta only after the SHA resolves, and never
+# overwrite a valid file. Resolution failure must not fail the scan.
+skill_attribution "github-pr-review" >/dev/null
+
 # Resolve the enrolled repo set from ~/.repoman/repos.json (owner/name tuples).
 # repoman_config is not needed here -- the scanner queries GitHub directly and
 # writes no fork, so it needs no REPOS_DIR/FORK_OWNER.

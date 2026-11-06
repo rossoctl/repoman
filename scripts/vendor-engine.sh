@@ -21,6 +21,15 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$SRC" ] && [ -n "$DEST" ] || { echo "ERROR: --source and --dest are required" >&2; exit 2; }
 
+# Fail closed: if $SRC cannot be inspected at all (not a git checkout — e.g.
+# a tarball extract — or git missing), the dirty check below would read the
+# resulting empty output as "clean", the run would only die at the stamp
+# step, and the dest would be left half-vendored with a stale _vendor.json.
+# Unconditional: the stamp needs a source HEAD even with --allow-dirty.
+if ! git -C "$SRC" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "ERROR: cannot inspect $SRC (not a git checkout?); the provenance stamp requires a source HEAD" >&2; exit 1
+fi
+
 # Provenance guard: the stamp records the source HEAD SHA, so vendoring a
 # dirty tree would stamp a commit that does not contain the copied bytes
 # (see repoman#20). Reject a dirty source unless --allow-dirty is passed

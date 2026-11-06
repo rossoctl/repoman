@@ -85,4 +85,23 @@ if ! missing_source_fails; then echo "PASS: missing source fails loud"; else ech
 copied=$(find "$BADDEST" -maxdepth 1 -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${copied:-0}" = "0" ]; then echo "PASS: no half-vendored dir (dest empty on failure)"; else echo "FAIL: $copied files copied before the abort (half-vendored)"; fail=1; fi
 
+# --- Non-git source (full manifest, no .git): rejected before any copy ---
+# The dirty guard's `git status --porcelain` is empty for a non-git dir, which
+# used to read as "clean"; the run then died only at the stamp step, after
+# overwriting the dest. Must fail closed — with and without --allow-dirty
+# (the stamp needs a source HEAD either way).
+NOGITDEST="$TMP/nogitdest"
+NOGIT="$TMP/nogit"; mkdir -p "$NOGIT/scripts"
+# shellcheck disable=SC2086
+for f in $MANIFEST; do echo x > "$NOGIT/scripts/$f.sh"; done
+# shellcheck disable=SC2086
+for f in $EXTRA_FILES; do echo x > "$NOGIT/scripts/$f"; done
+if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" >/dev/null 2>&1; then
+  echo "FAIL: non-git source was not rejected"; fail=1
+else echo "PASS: non-git source rejected"; fi
+if [ ! -d "$NOGITDEST" ]; then echo "PASS: non-git rejection left dest uncreated"; else echo "FAIL: non-git rejection still created dest"; fail=1; fi
+if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" --allow-dirty >/dev/null 2>&1; then
+  echo "FAIL: non-git source accepted with --allow-dirty"; fail=1
+else echo "PASS: non-git source rejected even with --allow-dirty"; fi
+
 [ "$fail" -eq 0 ] && echo "PASS" || { echo "FAILURES"; exit 1; }

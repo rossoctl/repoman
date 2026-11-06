@@ -53,6 +53,20 @@ bash "$VENDOR" --source "$SRC" --dest "$DEST" >/dev/null 2>&1
 got2=$(jq -r '.source_sha' "$DEST/_vendor.json" 2>/dev/null)
 if [ "$got2" = "$want" ]; then echo "PASS: idempotent stamp sha"; else echo "FAIL: idempotency $got2 != $want"; fail=1; fi
 
+# --- Dirty source: rejected before any copy, dest left uncreated ---
+DIRTYDEST="$TMP/dirtydest"
+echo x >> "$SRC/scripts/org.sh"   # uncommitted modification
+if bash "$VENDOR" --source "$SRC" --dest "$DIRTYDEST" >/dev/null 2>&1; then
+  echo "FAIL: dirty source was not rejected"; fail=1
+else echo "PASS: dirty source rejected"; fi
+if [ ! -d "$DIRTYDEST" ]; then echo "PASS: dirty rejection left dest uncreated"; else echo "FAIL: dirty rejection still created dest"; fail=1; fi
+# --- Dirty source with --allow-dirty: override works, stamp still stamped ---
+if bash "$VENDOR" --source "$SRC" --dest "$DIRTYDEST" --allow-dirty >/dev/null 2>&1; then
+  echo "PASS: --allow-dirty overrides the guard"
+else echo "FAIL: --allow-dirty did not override"; fail=1; fi
+if [ -f "$DIRTYDEST/org.sh" ]; then echo "PASS: --allow-dirty run copied files"; else echo "FAIL: --allow-dirty run copied nothing"; fail=1; fi
+git -C "$SRC" checkout -- scripts/org.sh   # restore for the tests below
+
 # --- Missing source fails loud AND leaves the dest empty (no half-vendored dir) ---
 BADDEST="$TMP/baddest"
 missing_source_fails() (
@@ -70,5 +84,24 @@ missing_source_fails() (
 if ! missing_source_fails; then echo "PASS: missing source fails loud"; else echo "FAIL: missing source did not fail"; fail=1; fi
 copied=$(find "$BADDEST" -maxdepth 1 -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${copied:-0}" = "0" ]; then echo "PASS: no half-vendored dir (dest empty on failure)"; else echo "FAIL: $copied files copied before the abort (half-vendored)"; fail=1; fi
+
+# --- Non-git source (full manifest, no .git): rejected before any copy ---
+# The dirty guard's `git status --porcelain` is empty for a non-git dir, which
+# used to read as "clean"; the run then died only at the stamp step, after
+# overwriting the dest. Must fail closed — with and without --allow-dirty
+# (the stamp needs a source HEAD either way).
+NOGITDEST="$TMP/nogitdest"
+NOGIT="$TMP/nogit"; mkdir -p "$NOGIT/scripts"
+# shellcheck disable=SC2086
+for f in $MANIFEST; do echo x > "$NOGIT/scripts/$f.sh"; done
+# shellcheck disable=SC2086
+for f in $EXTRA_FILES; do echo x > "$NOGIT/scripts/$f"; done
+if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" >/dev/null 2>&1; then
+  echo "FAIL: non-git source was not rejected"; fail=1
+else echo "PASS: non-git source rejected"; fi
+if [ ! -d "$NOGITDEST" ]; then echo "PASS: non-git rejection left dest uncreated"; else echo "FAIL: non-git rejection still created dest"; fail=1; fi
+if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" --allow-dirty >/dev/null 2>&1; then
+  echo "FAIL: non-git source accepted with --allow-dirty"; fail=1
+else echo "PASS: non-git source rejected even with --allow-dirty"; fi
 
 [ "$fail" -eq 0 ] && echo "PASS" || { echo "FAILURES"; exit 1; }

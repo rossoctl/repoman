@@ -8,16 +8,35 @@ set -uo pipefail
 # Part of the RepoMan v0.1.0 packaged release (epic rossoctl/automation#72).
 #
 #   vendor-engine.sh --source <automation-repo> --dest <repoman-scripts-dir>
+#                    [--allow-dirty]
 
-SRC="" DEST=""
+SRC="" DEST="" ALLOW_DIRTY=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --source) SRC="${2:-}"; shift 2 ;;
     --dest)   DEST="${2:-}"; shift 2 ;;
+    --allow-dirty) ALLOW_DIRTY=true; shift ;;
     *) echo "ERROR: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$SRC" ] && [ -n "$DEST" ] || { echo "ERROR: --source and --dest are required" >&2; exit 2; }
+
+# Fail closed: if $SRC cannot be inspected at all (not a git checkout — e.g.
+# a tarball extract — or git missing), the dirty check below would read the
+# resulting empty output as "clean", the run would only die at the stamp
+# step, and the dest would be left half-vendored with a stale _vendor.json.
+# Unconditional: the stamp needs a source HEAD even with --allow-dirty.
+if ! git -C "$SRC" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "ERROR: cannot inspect $SRC (not a git checkout?); the provenance stamp requires a source HEAD" >&2; exit 1
+fi
+
+# Provenance guard: the stamp records the source HEAD SHA, so vendoring a
+# dirty tree would stamp a commit that does not contain the copied bytes
+# (see repoman#20). Reject a dirty source unless --allow-dirty is passed
+# (scratch experiments only; the stamp then knowingly lies about the bytes).
+if [ "$ALLOW_DIRTY" = false ] && [ -n "$(git -C "$SRC" status --porcelain 2>/dev/null)" ]; then
+  echo "ERROR: source $SRC has uncommitted changes; commit or stash them so the provenance stamp matches the vendored bytes (or pass --allow-dirty)" >&2; exit 1
+fi
 
 # The 26 engine shell scripts. Flat set: nearly all source program-lib.sh,
 # which sources core.sh/github-api.sh/fork.sh/org.sh/repoman-requirements.sh.

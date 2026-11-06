@@ -73,7 +73,7 @@ RepoMan is developed across three repositories:
 | [rossoctl/agent-skills](https://github.com/rossoctl/agent-skills) | Skills designed to work standalone as well as with RepoMan. |
 | [rossoctl/repoman](https://github.com/rossoctl/repoman) (this repo) | Distribution (`rossoctl-repoman` marketplace) and the canonical home for RepoMan-specific `SKILL.md`s. The engine is not authored here. |
 
-See the `CHANGELOG.md` for release history.
+See the `[CHANGELOG.md](https://github.com/rossoctl/repoman/blob/main/CHANGELOG.md)` for release history.
 
 ### Contributor workflow
 

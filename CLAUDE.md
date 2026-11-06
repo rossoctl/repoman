@@ -55,7 +55,7 @@ This repo **distributes** RepoMan; it is not where the engine is developed.
 - Everything under `skills/repoman/scripts/` — the shell scripts and the
   non-shell extras (e.g. `doc-drift-check.py`) — is **vendored output**,
   provenance-stamped in `skills/repoman/scripts/_vendor.json`. **Never edit
-  anything there in place.** To update it, run
+  anything here in place.** To update it, run
   `scripts/vendor-engine.sh --source <automation-checkout> --dest skills/repoman/scripts`
   from a clean automation checkout that has your fix committed (the script
   rejects a dirty source unless `--allow-dirty` is passed).

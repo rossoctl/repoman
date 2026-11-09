@@ -4,11 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-11-04
+## [0.1.1] - 2026-11-05
 
 ### Added
 
-- **doc-drift program.** The scanner and fixer compare documentation to the code at a pinned git ref (paths, flags, enumerations, retired names, versions, and absence claims) and draft Keep a Changelog notes from merged pull requests. It ships inside the `repoman` plugin and as its own marketplace plugin.
+- **doc-drift program.** The scanner and fixer compare documentation to the code at a pinned git ref (paths, flags, enumerations, retired names, versions, and absence claims) and draft Keep a Changelog notes from merged pull requests. It ships inside the `repoman` plugin and as its own marketplace plugin. (#12)
+- **REPOMAN banner** on interactive sessions. (#9)
 - **Shellcheck** for the vendor tooling (`scripts/vendor-engine.sh` and `tests/test-vendor-engine.sh`).
 
 ### Changed
@@ -16,7 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Marketplace version is `0.1.1`. The `v0.1.1` tag is cut from `main` after this release merges.
 - Bundled engine is vendored from `rossoctl/automation` `fa619090`, including the pinned-SHA footer for PR review and the weekly report.
 
-## [0.1.0] - 2026-10-23
+## [0.1.0] - 2026-10-27
 
 First tagged release of RepoMan, distributed through the `rossoctl-repoman`
 marketplace.

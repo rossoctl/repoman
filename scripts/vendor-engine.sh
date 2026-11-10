@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
 set -uo pipefail
-# Vendor the RepoMan engine from an automation checkout into the repoman plugin's
-# flat scripts dir, then stamp the source commit SHA for provenance.
+# Vendor the RepoMan engine from an automation checkout, then stamp the source
+# commit SHA for provenance. Two modes:
+#   --dest   <dir>  : the repoman plugin's flat scripts dir (the release bundle).
+#   --skills <dir>  : the standalone link-health/dep-bump skill dirs under it.
 #
-# Explicit manifest (never a glob) so this can only ever populate the repoman
-# plugin — it must never touch a standalone skill's scripts/ (see agent-skills#51).
+# Explicit manifests (never a glob): the run can only ever write the dirs and
+# files named in MANIFEST/EXTRA_FILES (plugin) or SKILL_SET/SKILL_LIB
+# (standalone) — preserving the agent-skills#51 intent that no unlisted path is
+# touched, now that standalone dirs are a deliberate target.
 # Part of the RepoMan v0.1.0 packaged release (epic rossoctl/automation#72).
 #
-#   vendor-engine.sh --source <automation-repo> --dest <repoman-scripts-dir>
-#                    [--allow-dirty]
+#   vendor-engine.sh --source <automation-repo> --dest   <repoman-scripts-dir> [--allow-dirty]
+#   vendor-engine.sh --source <automation-repo> --skills <repoman-skills-dir>  [--allow-dirty]
 
-SRC="" DEST="" ALLOW_DIRTY=false
+SRC="" DEST="" SKILLS="" ALLOW_DIRTY=false
+# needs_value <flag> <argc>: a value-taking flag must have an argument after it,
+# or `shift 2` would fail to shift and the loop would spin forever.
+needs_value() { [ "$2" -ge 2 ] || { echo "ERROR: $1 needs a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --source) SRC="${2:-}"; shift 2 ;;
-    --dest)   DEST="${2:-}"; shift 2 ;;
+    --source) needs_value "$1" "$#"; SRC="$2"; shift 2 ;;
+    --dest)   needs_value "$1" "$#"; DEST="$2"; shift 2 ;;
+    --skills) needs_value "$1" "$#"; SKILLS="$2"; shift 2 ;;
     --allow-dirty) ALLOW_DIRTY=true; shift ;;
     *) echo "ERROR: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$SRC" ] && [ -n "$DEST" ] || { echo "ERROR: --source and --dest are required" >&2; exit 2; }
+[ -n "$SRC" ] || { echo "ERROR: --source is required" >&2; exit 2; }
+if [ -n "$DEST" ] && [ -n "$SKILLS" ]; then
+  echo "ERROR: --dest and --skills are mutually exclusive" >&2; exit 2
+fi
+[ -n "$DEST" ] || [ -n "$SKILLS" ] || { echo "ERROR: one of --dest or --skills is required" >&2; exit 2; }
 
 # Fail closed: if $SRC cannot be inspected at all (not a git checkout — e.g.
 # a tarball extract — or git missing), the dirty check below would read the

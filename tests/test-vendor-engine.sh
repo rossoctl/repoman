@@ -104,4 +104,28 @@ if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" --allow-dirty >/dev/null
   echo "FAIL: non-git source accepted with --allow-dirty"; fail=1
 else echo "PASS: non-git source rejected even with --allow-dirty"; fi
 
+# --- Mode exclusivity: --dest and --skills together is a usage error ---
+# Must be rejected specifically for being mutually exclusive, not for --skills
+# being an unknown flag (which is the pre-feature behavior).
+excl_err=$(bash "$VENDOR" --source "$SRC" --dest "$DEST" --skills "$TMP/sk" 2>&1)
+excl_rc=$?
+if [ "$excl_rc" != "0" ] && printf '%s' "$excl_err" | grep -qi 'mutually exclusive'; then
+  echo "PASS: --dest + --skills rejected as mutually exclusive"
+else
+  echo "FAIL: --dest + --skills not rejected for exclusivity (rc=$excl_rc, msg=$excl_err)"; fail=1
+fi
+# --- --skills alone is an accepted flag (not 'unknown arg') ---
+sk_err=$(bash "$VENDOR" --source "$SRC" --skills "$TMP/skflag" 2>&1 || true)
+if printf '%s' "$sk_err" | grep -qi 'unknown arg'; then
+  echo "FAIL: --skills still treated as unknown arg: $sk_err"; fail=1
+else
+  echo "PASS: --skills is a recognized flag"
+fi
+# --- A value-taking flag with no value must fail, not hang (clawgenti #26) ---
+if bash "$VENDOR" --source "$SRC" --skills >/dev/null 2>&1; then
+  echo "FAIL: --skills with no value should be a usage error"; fail=1
+else
+  echo "PASS: --skills with no value is rejected (no hang)"
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS" || { echo "FAILURES"; exit 1; }

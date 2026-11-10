@@ -39,26 +39,25 @@ gh auth status
 
 The authenticated account needs read access to all repos in the target org, and write access to create issues.
 
-### 2. Ensure repos are cloned
+### 2. Enrolled repo set (`~/.repoman/repos.json`)
 
-The scanner needs all org repos cloned into a single directory. If you don't have them yet, clone them:
+The scanner acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
+`/repoman` setup (or `repoman-setup.sh`). It reads that file to decide which repos
+to scan and **fails loud if it is missing or empty** — if you hit that error, run
+setup first (and tell the user) rather than retrying.
 
-```bash
-mkdir -p ~/my-org
-gh repo list <org> --limit 100 --source --no-archived --json name --jq '.[].name' | while read -r repo; do
-  gh repo clone "<org>/$repo" "$HOME/my-org/$repo" 2>/dev/null || true
-done
-```
+### 3. Set REPOS_DIR and clone the enrolled repos
 
-**Always ask the user for confirmation before cloning repos.**
-
-### 3. Set REPOS_DIR
+`REPOS_DIR` is the directory holding local clones of the enrolled repos; the scanner
+reads each enrolled `owner/name` from there and exits with an error if `REPOS_DIR`
+is unset.
 
 ```bash
 export REPOS_DIR=~/my-org
 ```
 
-This is required. The script will exit with an error if `REPOS_DIR` is not set.
+Clone each enrolled repo under `REPOS_DIR` if you don't have them yet. **Always ask
+the user for confirmation before cloning repos.**
 
 ### 4. Confirm report location
 
@@ -69,7 +68,7 @@ Reports are saved to `REPORTS_DIR` (default: `./reports`). **Tell the user where
 **Always run with `--dry-run` first:**
 
 ```bash
-bash scripts/link-health-scanner.sh --dry-run --org <org>
+bash scripts/link-health-scanner.sh --dry-run
 ```
 
 Review the output. If the results look correct, ask the user if they want to proceed with a live run.
@@ -77,7 +76,7 @@ Review the output. If the results look correct, ask the user if they want to pro
 **Live run (creates/closes issues):**
 
 ```bash
-bash scripts/link-health-scanner.sh --org <org> --issue-limit 5
+bash scripts/link-health-scanner.sh --issue-limit 5
 ```
 
 Use `--issue-limit` to cap issue creation, especially on first runs.

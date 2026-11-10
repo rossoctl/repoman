@@ -37,23 +37,23 @@ gh auth status
 
 Ensure the token has access to the target org's repos and PRs.
 
-### 2. Ensure repos are cloned
+### 2. Enrolled repo set (`~/.repoman/repos.json`)
 
-The scanner needs local clones for ecosystem detection (checking which manifest files exist). If repos are not cloned:
+The scanner acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
+`/repoman` setup (or `repoman-setup.sh`). It reads that file to decide which repos
+to scan and **fails loud if it is missing or empty** — if you hit that error, run
+setup first (and tell the user) rather than retrying.
 
-```bash
-REPOS_DIR=~/kagenti
-mkdir -p "$REPOS_DIR"
-gh repo list <org> --limit 100 --json nameWithOwner --jq '.[].nameWithOwner' | while read -r repo; do
-  gh repo clone "$repo" "$REPOS_DIR/$(basename "$repo")" -- --depth 1 2>/dev/null || true
-done
-```
+### 3. Set REPOS_DIR and clone the enrolled repos
 
-### 3. Set REPOS_DIR
+`REPOS_DIR` is the directory holding local clones of the enrolled repos; the scanner
+needs them for ecosystem detection (checking which manifest files exist).
 
 ```bash
 export REPOS_DIR=~/kagenti  # directory containing cloned repos
 ```
+
+Clone each enrolled repo under `REPOS_DIR` if you don't have them yet.
 
 ### 4. Confirm report location
 
@@ -68,7 +68,7 @@ export REPORTS_DIR=~/reports/dep-bump
 **Always run with `--dry-run` first:**
 
 ```bash
-bash scripts/dep-bump-scanner.sh --dry-run --org kagenti
+bash scripts/dep-bump-scanner.sh --dry-run
 ```
 
 This scans and reports without creating or closing any issues.
@@ -76,13 +76,13 @@ This scans and reports without creating or closing any issues.
 **Live run with issue limit:**
 
 ```bash
-bash scripts/dep-bump-scanner.sh --org kagenti --issue-limit 5
+bash scripts/dep-bump-scanner.sh --issue-limit 5
 ```
 
 **Full live run:**
 
 ```bash
-bash scripts/dep-bump-scanner.sh --org kagenti
+bash scripts/dep-bump-scanner.sh
 ```
 
 ## Interpreting Output

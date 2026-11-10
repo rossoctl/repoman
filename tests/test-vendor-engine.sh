@@ -104,6 +104,54 @@ if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" --allow-dirty >/dev/null
   echo "FAIL: non-git source accepted with --allow-dirty"; fail=1
 else echo "PASS: non-git source rejected even with --allow-dirty"; fi
 
+# --- Standalone --skills mode: each dir gets exactly its manifest set ---
+# link-check.py is a link-health-scanner extra not already in the fake source.
+echo "# py" > "$SRC/scripts/link-check.py"
+git -C "$SRC" -c user.email=t@t -c user.name=t add -A
+git -C "$SRC" -c user.email=t@t -c user.name=t commit -qm link-check
+SK="$TMP/skills"
+if ! bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1; then
+  echo "FAIL: --skills vendor returned non-zero"; fail=1
+fi
+SKILL_LIB="program-lib core github-api fork org repoman-requirements"
+check_skill_dir() { # <skill-dir> <file…>  (files are basenames incl. extension)
+  local dir="$1"; shift
+  local d="$SK/$dir/scripts" ok=1 f
+  for f in $SKILL_LIB; do
+    [ -f "$d/$f.sh" ] || { ok=0; echo "  missing $dir/$f.sh"; }
+  done
+  for f in "$@"; do
+    [ -f "$d/$f" ] || { ok=0; echo "  missing $dir/$f"; }
+  done
+  [ -f "$d/_vendor.json" ] || { ok=0; echo "  missing $dir/_vendor.json"; }
+  if [ "$ok" = 1 ]; then echo "PASS: $dir populated"; else echo "FAIL: $dir incomplete"; fail=1; fi
+}
+check_skill_dir link-health-scanner link-health-scanner.sh extract-broken-links.sh link-check.py
+check_skill_dir link-health-fixer link-health-fixer.sh
+check_skill_dir dep-bump-scanner dep-bump-scanner.sh
+check_skill_dir dep-bump-fixer dep-bump-fixer.sh
+# dep-bump-fixer must NOT co-locate dep-bump-scanner.sh (docs-only reference)
+if [ -f "$SK/dep-bump-fixer/scripts/dep-bump-scanner.sh" ]; then
+  echo "FAIL: dep-bump-fixer should not co-locate dep-bump-scanner.sh"; fail=1
+else
+  echo "PASS: dep-bump-fixer has no scanner co-location"
+fi
+# Per-dir stamp: source_sha == source HEAD, and files list is dir-specific.
+sk_want=$(git -C "$SRC" rev-parse HEAD)
+sk_got=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
+if [ "$sk_got" = "$sk_want" ]; then echo "PASS: per-dir stamp sha == source HEAD"; else echo "FAIL: per-dir stamp sha $sk_got != $sk_want"; fail=1; fi
+# link-health-scanner stamp lists link-check.py; dep-bump-scanner stamp does not.
+if jq -e '.files | index("link-check.py")' "$SK/link-health-scanner/scripts/_vendor.json" >/dev/null 2>&1 \
+   && ! jq -e '.files | index("link-check.py")' "$SK/dep-bump-scanner/scripts/_vendor.json" >/dev/null 2>&1; then
+  echo "PASS: per-dir files list is skill-specific"
+else
+  echo "FAIL: per-dir files list not skill-specific"; fail=1
+fi
+# Idempotency: rerun => same source_sha + same files list for a dir.
+bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
+sk_got2=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
+if [ "$sk_got2" = "$sk_want" ]; then echo "PASS: --skills idempotent stamp sha"; else echo "FAIL: --skills idempotency $sk_got2 != $sk_want"; fail=1; fi
+
 # --- Mode exclusivity: --dest and --skills together is a usage error ---
 # Must be rejected specifically for being mutually exclusive, not for --skills
 # being an unknown flag (which is the pre-feature behavior).

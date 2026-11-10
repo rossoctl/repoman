@@ -62,54 +62,137 @@ repoman-requirements repoman-run repoman-setup weekly-report"
 # Non-shell engine files copied alongside the manifest (explicit, no glob).
 EXTRA_FILES="doc-drift-check.py"
 
-# Pre-validate the WHOLE manifest before copying anything, so a source missing
-# late in the list cannot leave a half-vendored dest with a stale _vendor.json.
-# shellcheck disable=SC2086
-for f in $MANIFEST; do
-  if [ ! -f "$SRC/scripts/$f.sh" ]; then
-    echo "ERROR: missing engine source: $SRC/scripts/$f.sh (nothing copied)" >&2; exit 1
-  fi
-done
-# shellcheck disable=SC2086
-for f in $EXTRA_FILES; do
-  if [ ! -f "$SRC/scripts/$f" ]; then
-    echo "ERROR: missing engine source: $SRC/scripts/$f (nothing copied)" >&2; exit 1
-  fi
-done
+# The six modular lib files every standalone skill dir needs. program-lib.sh is
+# the aggregator; it sources the other five siblings via $SCRIPT_DIR, so all six
+# must be co-located in each skill dir for sourcing to resolve.
+SKILL_LIB="program-lib core github-api fork org repoman-requirements"
 
-mkdir -p "$DEST"
-# shellcheck disable=SC2086
-for f in $MANIFEST; do
-  if ! cp "$SRC/scripts/$f.sh" "$DEST/$f.sh"; then
-    echo "ERROR: copy failed for $f.sh" >&2; exit 1
-  fi
-done
-# shellcheck disable=SC2086
-for f in $EXTRA_FILES; do
-  if ! cp "$SRC/scripts/$f" "$DEST/$f"; then
-    echo "ERROR: copy failed for $f" >&2; exit 1
-  fi
-done
+# Per-skill file set for --skills mode: "<skill-dir>:<basename>[,<basename>…]".
+# Each entry's basenames are source files under $SRC/scripts/ to co-locate, on
+# top of SKILL_LIB. A basename with an extension (link-check.py) is taken as-is;
+# one without gets ".sh" appended. Explicit, never a glob (preserves the
+# agent-skills#51 intent that this can only write the dirs/files named here).
+# dep-bump-fixer's SKILL.md mentions dep-bump-scanner.sh only as a usage example,
+# not a runtime dependency, so it is deliberately NOT co-located there.
+SKILL_SET="link-health-scanner:link-health-scanner,extract-broken-links,link-check.py \
+link-health-fixer:link-health-fixer \
+dep-bump-scanner:dep-bump-scanner \
+dep-bump-fixer:dep-bump-fixer"
 
-# Provenance stamp: record the SOURCE repo's HEAD sha (not the dest repo's).
-if ! SHA=$(git -C "$SRC" rev-parse HEAD 2>/dev/null); then
+# Resolve the SOURCE repo HEAD sha once (shared by both modes' stamps).
+if ! SRC_SHA=$(git -C "$SRC" rev-parse HEAD 2>/dev/null); then
   echo "ERROR: cannot read source HEAD sha from $SRC" >&2; exit 1
 fi
-NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-# word-splitting $MANIFEST into one line per script is intentional
-# shellcheck disable=SC2086
-if ! FILES_JSON=$( {
-  printf '%s\n' $MANIFEST | sed 's/$/.sh/'
-  printf '%s\n' $EXTRA_FILES
-} | jq -R . | jq -s .); then
-  echo "ERROR: could not build file list" >&2; exit 1
-fi
-if ! jq -n --arg repo "rossoctl/automation" --arg sha "$SHA" --arg at "$NOW" \
-      --argjson files "$FILES_JSON" \
-      '{source_repo:$repo, source_sha:$sha, vendored_at:$at, files:$files}' \
-      > "$DEST/_vendor.json"; then
-  echo "ERROR: provenance stamp write failed" >&2; exit 1
-fi
 
-# shellcheck disable=SC2086
-echo "Vendored $(echo $MANIFEST | wc -w | tr -d ' ') engine scripts (+ extras) to $DEST (source $SHA)"
+# write_vendor_stamp <dest-dir> <newline-separated-file-list>
+# Writes <dest-dir>/_vendor.json with the source repo, the source HEAD sha, a
+# fresh timestamp, and the given file list. vendored_at intentionally varies per
+# run; source_sha + files are the stable, tested provenance.
+write_vendor_stamp() {
+  local dest="$1" files_nl="$2" files_json now
+  if ! files_json=$(printf '%s\n' "$files_nl" | jq -R . | jq -s .); then
+    echo "ERROR: could not build file list for $dest" >&2; return 1
+  fi
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if ! jq -n --arg repo "rossoctl/automation" --arg sha "$SRC_SHA" --arg at "$now" \
+        --argjson files "$files_json" \
+        '{source_repo:$repo, source_sha:$sha, vendored_at:$at, files:$files}' \
+        > "$dest/_vendor.json"; then
+    echo "ERROR: provenance stamp write failed for $dest" >&2; return 1
+  fi
+}
+
+if [ -n "$DEST" ]; then
+  # --- Plugin mode: flat engine manifest into one dest dir. ---
+  # Pre-validate the WHOLE manifest before copying anything, so a source missing
+  # late in the list cannot leave a half-vendored dest with a stale _vendor.json.
+  # shellcheck disable=SC2086
+  for f in $MANIFEST; do
+    if [ ! -f "$SRC/scripts/$f.sh" ]; then
+      echo "ERROR: missing engine source: $SRC/scripts/$f.sh (nothing copied)" >&2; exit 1
+    fi
+  done
+  # shellcheck disable=SC2086
+  for f in $EXTRA_FILES; do
+    if [ ! -f "$SRC/scripts/$f" ]; then
+      echo "ERROR: missing engine source: $SRC/scripts/$f (nothing copied)" >&2; exit 1
+    fi
+  done
+
+  mkdir -p "$DEST"
+  # shellcheck disable=SC2086
+  for f in $MANIFEST; do
+    if ! cp "$SRC/scripts/$f.sh" "$DEST/$f.sh"; then
+      echo "ERROR: copy failed for $f.sh" >&2; exit 1
+    fi
+  done
+  # shellcheck disable=SC2086
+  for f in $EXTRA_FILES; do
+    if ! cp "$SRC/scripts/$f" "$DEST/$f"; then
+      echo "ERROR: copy failed for $f" >&2; exit 1
+    fi
+  done
+
+  # word-splitting $MANIFEST into one line per script is intentional
+  # shellcheck disable=SC2086
+  stamp_files=$( { printf '%s\n' $MANIFEST | sed 's/$/.sh/'; printf '%s\n' $EXTRA_FILES; } )
+  write_vendor_stamp "$DEST" "$stamp_files" || exit 1
+
+  # shellcheck disable=SC2086
+  echo "Vendored $(echo $MANIFEST | wc -w | tr -d ' ') engine scripts (+ extras) to $DEST (source $SRC_SHA)"
+
+elif [ -n "$SKILLS" ]; then
+  # --- Standalone-skill mode: resync each standalone skill dir. ---
+  # Resolve every skill's source file list first, then pre-validate the WHOLE
+  # union, so a source missing for any skill fails loud with no dir half-vendored.
+  # resolve_basename() maps a SKILL_SET token to the source basename under scripts/:
+  #   "link-check.py" -> "link-check.py"; "dep-bump-scanner" -> "dep-bump-scanner.sh"
+  resolve_basename() {
+    case "$1" in
+      *.*) printf '%s' "$1" ;;   # already has an extension (e.g. .py)
+      *)   printf '%s.sh' "$1" ;;
+    esac
+  }
+
+  # Pre-validate: every lib file + every per-skill file must exist in the source.
+  # shellcheck disable=SC2086
+  for entry in $SKILL_SET; do
+    skill_dir="${entry%%:*}"; csv="${entry#*:}"
+    for f in $SKILL_LIB; do
+      [ -f "$SRC/scripts/$f.sh" ] || { echo "ERROR: missing engine source: $SRC/scripts/$f.sh (for $skill_dir; nothing copied)" >&2; exit 1; }
+    done
+    IFS=',' read -ra parts <<< "$csv"
+    for p in "${parts[@]}"; do
+      bn=$(resolve_basename "$p")
+      [ -f "$SRC/scripts/$bn" ] || { echo "ERROR: missing engine source: $SRC/scripts/$bn (for $skill_dir; nothing copied)" >&2; exit 1; }
+    done
+  done
+
+  # Copy + stamp per skill dir.
+  # shellcheck disable=SC2086
+  for entry in $SKILL_SET; do
+    skill_dir="${entry%%:*}"; csv="${entry#*:}"
+    dest="$SKILLS/$skill_dir/scripts"
+    mkdir -p "$dest"
+    files_nl=""
+    for f in $SKILL_LIB; do
+      if ! cp "$SRC/scripts/$f.sh" "$dest/$f.sh"; then
+        echo "ERROR: copy failed for $f.sh -> $dest" >&2; exit 1
+      fi
+      files_nl="${files_nl}${f}.sh
+"
+    done
+    IFS=',' read -ra parts <<< "$csv"
+    for p in "${parts[@]}"; do
+      bn=$(resolve_basename "$p")
+      if ! cp "$SRC/scripts/$bn" "$dest/$bn"; then
+        echo "ERROR: copy failed for $bn -> $dest" >&2; exit 1
+      fi
+      files_nl="${files_nl}${bn}
+"
+    done
+    # Trim trailing newline before stamping.
+    write_vendor_stamp "$dest" "${files_nl%$'\n'}" || exit 1
+    echo "Resynced $skill_dir (source $SRC_SHA)"
+  done
+fi

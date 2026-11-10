@@ -1,7 +1,7 @@
 {
   "source_repo": "rossoctl/automation",
-  "source_sha": "fa61909029207b08d17eff5625bd0aa4772c90b2",
-  "vendored_at": "2026-11-03T22:56:54Z",
+  "source_sha": "e1ebdcb1d6b2753c9e475e8aac2973a0405adc3f",
+  "vendored_at": "2026-11-10T18:19:10Z",
   "files": [
     "automation-health-dashboard.sh",
     "core.sh",
@@ -29,6 +29,7 @@
     "repoman-run.sh",
     "repoman-setup.sh",
     "weekly-report.sh",
-    "doc-drift-check.py"
+    "doc-drift-check.py",
+    "link-check.py"
   ]
 }

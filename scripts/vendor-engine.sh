@@ -48,7 +48,7 @@ pr-review-scanner program-lib repo-sync repoman-check repoman-index \
 repoman-requirements repoman-run repoman-setup weekly-report"
 
 # Non-shell engine files copied alongside the manifest (explicit, no glob).
-EXTRA_FILES="doc-drift-check.py"
+EXTRA_FILES="doc-drift-check.py link-check.py"
 
 # Pre-validate the WHOLE manifest before copying anything, so a source missing
 # late in the list cannot leave a half-vendored dest with a stale _vendor.json.

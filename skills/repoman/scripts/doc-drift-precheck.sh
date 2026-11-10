@@ -22,7 +22,9 @@ while [ $# -gt 0 ]; do
 Usage: doc-drift-precheck.sh [--repo owner/name] [--worklist /path]
 
 Run the deterministic doc-drift checker. Exit 1 when the worklist is empty;
-exit 0 and print "worklist: <path>" when it is not. Fetch failures are
+exit 0 and print "worklist: <path>" when it is not. The printed path persists
+after the run. --worklist overrides the default of
+${REPORTS_DIR:-$HOME/reports/doc-drift}/worklist.json. Fetch failures are
 fail-open (exit 2) so a broken gate does not block the run.
 EOF
       exit 0
@@ -39,8 +41,13 @@ if [ ! -f "$CHECK_PY" ]; then
 fi
 
 setup_workspace "doc-drift-precheck"
+# Default the worklist to a PERSISTENT path, not the per-run temp dir: setup_workspace
+# registers an EXIT trap that deletes $PROGRAM_TMPDIR, so a temp default would hand the
+# caller a path to a file that is already gone (#130). Mirror the scanner's REPORTS_DIR.
 if [ -z "$WORKLIST" ]; then
-  WORKLIST="$PROGRAM_TMPDIR/worklist.json"
+  REPORTS_DIR="${REPORTS_DIR:-$HOME/reports/doc-drift}"
+  mkdir -p "$REPORTS_DIR"
+  WORKLIST="$REPORTS_DIR/worklist.json"
 fi
 
 ENROLLED=$(repoman_load_enrolled) || exit 2

@@ -142,24 +142,31 @@ if [ "$COMMAND" = "begin" ]; then
     [ "$VERBOSE" = true ] && echo "    Fetching diff..." >&2
     gh pr diff "$number" --repo "$repo" > "$TMPDIR/pr-${number}.diff" 2>/dev/null || true
 
-    # Parse diff into structured map using the standalone parser
-    DIFF_MAP="[]"
+    # Parse diff into structured map using the standalone parser.
+    # The map is a PR-controlled blob and can run to hundreds of KB, so it is
+    # written straight to a file and never handed to jq on the command line: a
+    # single argv string is capped at 128 KiB (MAX_ARG_STRLEN) no matter how
+    # large ARG_MAX is, and a big PR's diff_map crosses that with E2BIG.
+    diff_map_file="$TMPDIR/diff-map-${number}.json"
+    echo "[]" > "$diff_map_file"
     if [ -s "$TMPDIR/pr-${number}.diff" ]; then
-      DIFF_MAP=$("$SCRIPT_DIR/parse-diff-map.sh" "$TMPDIR/pr-${number}.diff")
-      line_count=$(echo "$DIFF_MAP" | jq '[.[].hunks[].lines[]] | length')
-      [ "$VERBOSE" = true ] && echo "    Parsed diff_map: $line_count lines across $(echo "$DIFF_MAP" | jq 'length') files" >&2
+      "$SCRIPT_DIR/parse-diff-map.sh" "$TMPDIR/pr-${number}.diff" > "$diff_map_file"
+      line_count=$(jq '[.[].hunks[].lines[]] | length' "$diff_map_file")
+      [ "$VERBOSE" = true ] && echo "    Parsed diff_map: $line_count lines across $(jq 'length' "$diff_map_file") files" >&2
     fi
 
-    # Build enriched PR entry
-    enriched=$(jq -n \
+    # Build enriched PR entry (diff_map read from file, not argv)
+    enriched_file="$TMPDIR/entry-${number}.json"
+    jq -n \
       --arg repo "$repo" \
       --argjson number "$number" \
       --arg head_sha "$head_sha" \
-      --argjson diff_map "$DIFF_MAP" \
-      '{repo: $repo, number: $number, head_sha: $head_sha, diff_map: $diff_map}')
+      --slurpfile diff_map "$diff_map_file" \
+      '{repo: $repo, number: $number, head_sha: $head_sha, diff_map: $diff_map[0]}' \
+      > "$enriched_file"
 
-    # Append to output queue
-    jq --argjson entry "$enriched" '. += [$entry]' "$TMPDIR/output_queue.json" > "$TMPDIR/output_tmp.json"
+    # Append to output queue (entry read from file, not argv)
+    jq --slurpfile entry "$enriched_file" '. += [$entry[0]]' "$TMPDIR/output_queue.json" > "$TMPDIR/output_tmp.json"
     mv "$TMPDIR/output_tmp.json" "$TMPDIR/output_queue.json"
 
   done < "$TMPDIR/eligible_prs.jsonl"

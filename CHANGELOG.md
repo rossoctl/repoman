@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **link-health: stdlib Python link checker as the default.** `LINK_CHECKER=python` (the new default) uses the vendored `link-check.py`, so link-health needs only `python3` >= 3.8, `gh`, `jq`, and `bash` — no lychee install — and runs on a basic agent image. Egress-proxy refusals are classified as `unchecked`: they never open or auto-close issues, and the run summary, `latest.json`, and the automation-health dashboard report the unchecked count and top hosts. `LINK_CHECKER=lychee` remains an opt-in fallback, and `LINK_HEALTH_SHADOW_OUT` runs a checker side-by-side in shadow mode. (#3)
+
+### Changed
+
+- Bundled engine: link-health scanner, extractor, and automation-health dashboard updates from `rossoctl/automation`; `link-check.py` joins the vendored set (`scripts/vendor-engine.sh` extras).
+
 ## [0.1.1] - 2026-11-05
 
 ### Added

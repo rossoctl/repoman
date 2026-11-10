@@ -8,7 +8,7 @@ set -euo pipefail
 # hostnames (Kubernetes cluster-local .svc names, *.local, RFC1918 ranges) are
 # suppressed, since an external scanner can never reach them. lychee status is
 # normalized to enum tokens: numeric HTTP codes stay as-is; text statuses map
-# to timeout / dns / unreachable / error / unknown.
+# to timeout / dns / unreachable / unchecked / error / unknown.
 #
 # This logic was previously inline in link-health-scanner.sh; it is extracted
 # here so it can be unit-tested against synthetic lychee fixtures.
@@ -53,9 +53,11 @@ if [ "$LYCHEE_INPUT" != "-" ] && [ ! -s "$LYCHEE_INPUT" ]; then
 fi
 
 # --- Extract broken links from error_map (skip non-URL entries like "Error building URL") ---
-# Normalize lychee status to enum tokens: numeric codes stay as-is,
-# text statuses map to: timeout, dns, unreachable, error, unknown.
+# Normalize lychee/link-check status to enum tokens: numeric codes stay as-is,
+# text statuses map to: timeout, dns, unreachable, unchecked, error, unknown.
 # Suppress URLs with unreachable-by-design hostnames (cluster-local, .local, RFC1918).
+# "unchecked" (egress-proxy refusal) must match before the error catch-all so
+# the scanner can keep those out of the issue open/close path.
 jq -r --arg repo "$REPO_FULL" --arg repos_dir "$REPOS_PREFIX" '
   .error_map // {} | to_entries[] |
   .key as $filepath |
@@ -73,6 +75,7 @@ jq -r --arg repo "$REPO_FULL" --arg repos_dir "$REPOS_PREFIX" '
     if $raw_status == null then "unknown"
     elif ($raw_status | type) == "number" then ($raw_status | tostring)
     elif ($raw_status | test("^[0-9]{3}$")) then $raw_status
+    elif ($raw_status | ascii_downcase) == "unchecked" then "unchecked"
     elif ($raw_status | ascii_downcase | test("timeout")) then "timeout"
     elif ($raw_status | ascii_downcase | test("resolve|dns")) then "dns"
     elif ($raw_status | ascii_downcase | test("refused|reset|closed|unreachable|connect")) then "unreachable"

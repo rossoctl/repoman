@@ -152,6 +152,24 @@ bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
 sk_got2=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
 if [ "$sk_got2" = "$sk_want" ]; then echo "PASS: --skills idempotent stamp sha"; else echo "FAIL: --skills idempotency $sk_got2 != $sk_want"; fail=1; fi
 
+# --- --skills: a source missing for ONE skill fails loud, NO dir half-vendored ---
+BAD2="$TMP/bad2"; mkdir -p "$BAD2/scripts"
+# shellcheck disable=SC2086
+for f in $MANIFEST; do echo "#!/usr/bin/env bash" > "$BAD2/scripts/$f.sh"; done
+echo "# py" > "$BAD2/scripts/link-check.py"
+rm "$BAD2/scripts/dep-bump-fixer.sh"   # one skill's own script missing
+git -C "$BAD2" init -q
+git -C "$BAD2" -c user.email=t@t -c user.name=t add -A
+git -C "$BAD2" -c user.email=t@t -c user.name=t commit -qm init
+SKBAD="$TMP/skbad"
+if bash "$VENDOR" --source "$BAD2" --skills "$SKBAD" >/dev/null 2>&1; then
+  echo "FAIL: missing skill source should fail loud"; fail=1
+else
+  echo "PASS: missing skill source fails loud"
+fi
+skcopied=$(find "$SKBAD" -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${skcopied:-0}" = "0" ]; then echo "PASS: no skill dir half-vendored"; else echo "FAIL: $skcopied files copied before abort"; fail=1; fi
+
 # --- Mode exclusivity: --dest and --skills together is a usage error ---
 # Must be rejected specifically for being mutually exclusive, not for --skills
 # being an unknown flag (which is the pre-feature behavior).

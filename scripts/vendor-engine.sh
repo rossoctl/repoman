@@ -173,7 +173,9 @@ elif [ -n "$SKILLS" ]; then
   for entry in $SKILL_SET; do
     skill_dir="${entry%%:*}"; csv="${entry#*:}"
     dest="$SKILLS/$skill_dir/scripts"
-    mkdir -p "$dest"
+    if ! mkdir -p "$dest"; then
+      echo "ERROR: could not create $dest" >&2; exit 1
+    fi
     files_nl=""
     for f in $SKILL_LIB; do
       if ! cp "$SRC/scripts/$f.sh" "$dest/$f.sh"; then

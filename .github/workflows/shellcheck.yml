@@ -20,3 +20,14 @@ jobs:
         # Explicit paths — never a glob. Do not lint skills/repoman/scripts/
         # here; the engine is linted in rossoctl/automation.
         run: shellcheck --severity=warning scripts/vendor-engine.sh tests/test-vendor-engine.sh
+
+  tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run vendor-engine test suite
+        # Explicit path — repoman's only test suite today. jq, git, bash are
+        # preinstalled on ubuntu-latest; the suite builds its own fixtures.
+        run: bash tests/test-vendor-engine.sh

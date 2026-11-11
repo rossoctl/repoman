@@ -64,10 +64,13 @@ This repo **distributes** RepoMan; it is not where the engine is developed.
   [rossoctl/agent-skills](https://github.com/rossoctl/agent-skills) hosts
   skills designed to work standalone as well as with RepoMan — do not port
   RepoMan skill docs there.
-- The per-program `skills/<program>/scripts/` copies are known-stale relative
-  to automation's engine (resync tracked in
-  [#5](https://github.com/rossoctl/repoman/issues/5)).
-  Do not treat either side as authoritative or copy between them piecemeal.
+- The standalone `skills/{link-health,dep-bump}-{scanner,fixer}/scripts/` dirs
+  are also **vendored output**, each provenance-stamped in its own
+  `_vendor.json`. **Never edit them in place.** Resync them from a clean
+  automation checkout with
+  `scripts/vendor-engine.sh --source <automation-checkout> --skills skills`
+  (same dirty-source rule as `--dest`). automation's engine is authoritative;
+  do not hand-edit a vendored copy or copy between dirs piecemeal.
 - The full contributor workflow (placement, testing, dry runs, vendoring, PR
   rules) is in the README's `## Development` section — read it before
   changing anything here.

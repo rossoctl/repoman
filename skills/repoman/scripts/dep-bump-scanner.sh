@@ -74,7 +74,7 @@ ESCALATION_THRESHOLD=5
 
 # Provenance footer for the issue bodies this scanner creates. Resolved once at
 # startup: the helper lazily writes _meta.<skill>.json beside this skill and returns the
-# pinned-SHA RepoMan attribution (blob/main fallback when the SHA is unresolved).
+# pinned-SHA attribution (linkless fallback when the SHA is unresolved).
 SKILL_FOOTER=$(skill_attribution "dep-bump-scanner")
 
 # SLA thresholds (days)

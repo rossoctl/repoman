@@ -50,6 +50,41 @@ gh_with_backoff() {
   return 1
 }
 
+# Count the PR comments whose body matches a signature regex — the fixer's
+# dedup check, so it does not re-comment on a PR it already commented on.
+#
+# `gh pr view --jq` accepts a single jq expression and has no `--arg`, so the
+# signature must be bound with a REAL jq on a pipe, not inside gh's --jq. We
+# fetch the comments JSON (no --jq) and pipe to `jq --arg sig … test($sig)`.
+#
+# A fetch/parse failure returns -1 (UNKNOWN), kept distinct from 0 (no matching
+# comment) so a transient gh error does not read as "not commented yet" and make
+# the caller re-post a duplicate. The caller treats any non-zero result as
+# "skip": only a hard 0 proves it is safe to comment.
+#
+# Usage:
+#   n=$(fixer_comment_count "kagenti/adk" 42 "$FIXER_SIGNATURE")
+#   [ "$n" = "0" ] || echo "skip (already commented, or status unknown)"
+#
+# Args:
+#   $1 - full repo name (e.g., "kagenti/adk")
+#   $2 - PR number
+#   $3 - jq regex matched against each comment body (test())
+# Prints: the match count (>=0), or -1 if the fetch/parse failed
+fixer_comment_count() {
+  local repo="$1" pr_number="$2" sig="$3" comments count
+  if ! comments=$(gh_with_backoff pr view "$pr_number" --repo "$repo" --json comments 2>/dev/null); then
+    echo "-1"
+    return 0
+  fi
+  if ! count=$(printf '%s' "$comments" \
+      | jq -r --arg sig "$sig" '[.comments[] | select(.body | test($sig))] | length' 2>/dev/null); then
+    echo "-1"
+    return 0
+  fi
+  echo "$count"
+}
+
 # =============================================================================
 # GITHUB ISSUES
 # =============================================================================
@@ -201,7 +236,7 @@ issue_has_open_pr() {
 # Canonical skill source repo. Every attribution footer points here (the repo
 # where skills are canonical), NOT at the automation repo that happens to host
 # this library copy.
-SKILL_SOURCE_REPO="${SKILL_SOURCE_REPO:-rossoctl/agent-skills}"
+SKILL_SOURCE_REPO="${SKILL_SOURCE_REPO:-rossoctl/repoman}"
 
 # Resolve a skill's pinned commit SHA, writing a per-skill _meta file beside the
 # skill on first success (create-only, self-healing).
@@ -217,7 +252,7 @@ SKILL_SOURCE_REPO="${SKILL_SOURCE_REPO:-rossoctl/agent-skills}"
 # canonical source repo's commit history for that skill's path. On success the
 # meta file is written and the SHA echoed; on failure (offline, unauthorized,
 # rate limited) NOTHING is written -- the function warns to stderr and echoes
-# empty, so the caller falls back to the blob/main attribution and the next run
+# empty, so the caller falls back to the linkless attribution and the next run
 # retries. It must never write a sentinel such as {"version":"unknown"}: a
 # present-but-bogus file would stop the retry and pin a wrong version forever.
 #
@@ -237,16 +272,28 @@ resolve_skill_meta() {
   # authoritative, never overwritten (refreshing on skill update is the deploy
   # layer's job). But a present-yet-corrupt file (truncated write, hand-edit,
   # not JSON) yields no .version -- treating that as authoritative would pin the
-  # skill to the blob/main fallback forever with no self-heal. So we only short-
+  # skill to the linkless fallback forever with no self-heal. So we only short-
   # circuit on a readable version; a corrupt file falls through to re-resolution,
   # which overwrites it on success, honoring the spec's self-heal invariant.
   if [ -f "$meta_file" ]; then
     sha=$(jq -r '.version // empty' "$meta_file" 2>/dev/null)
-    if [ -n "$sha" ]; then
+    local stored_source
+    stored_source=$(jq -r '.source // empty' "$meta_file" 2>/dev/null)
+    if [ -n "$sha" ] && [ "$stored_source" = "$SKILL_SOURCE_REPO" ]; then
       printf '%s' "$sha"
       return 0
     fi
-    echo "WARN: $meta_file exists but carries no usable .version (corrupt?); re-resolving provenance." >&2
+    # A readable .version whose .source no longer matches the current
+    # SKILL_SOURCE_REPO is STALE (the default flipped underneath it): the pinned
+    # SHA belongs to the old source and would 404 under the new one. Treat it like
+    # a corrupt file -- fall through to re-resolution, which rewrites both version
+    # and source on success (automation#131 — the default flip must not strand
+    # existing installs on a dead link).
+    if [ -n "$sha" ]; then
+      echo "WARN: $meta_file source '$stored_source' != '$SKILL_SOURCE_REPO'; re-resolving provenance." >&2
+    else
+      echo "WARN: $meta_file exists but carries no usable .version (corrupt?); re-resolving provenance." >&2
+    fi
   fi
 
   # Resolve the pinned SHA from the canonical source repo's history for this
@@ -256,7 +303,7 @@ resolve_skill_meta() {
     --jq '.[0].sha' 2>/dev/null)
 
   if [ -z "$sha" ] || [ "$sha" = "null" ]; then
-    echo "WARN: could not resolve provenance SHA for skill '$skill_name'; using blob/main attribution (will retry next run)." >&2
+    echo "WARN: could not resolve provenance SHA for skill '$skill_name'; using linkless attribution (will retry next run)." >&2
     printf ''
     return 0
   fi
@@ -287,14 +334,16 @@ resolve_skill_meta() {
 #
 # Resolves the skill's pinned SHA (via resolve_skill_meta, using the caller's
 # own SCRIPT_DIR as the skill directory so it works on every deploy layout) and
-# returns the pinned-SHA RepoMan footer. On resolution failure it returns the
-# blob/main fallback that pins to the live default branch instead -- additive,
-# so a working scan never depends on a reachable GitHub API.
+# returns a lowercase markdown footer: 'Generated by repoman [<skill>@<sha>](blob/<sha>)'.
+# On resolution failure it returns a LINKLESS footer ('Generated by repoman <skill>')
+# rather than an unverified link -- additive, so a working scan never depends on a
+# reachable GitHub API.
 #
 # Usage: footer=$(skill_attribution "link-health-scanner")
 # Args:
 #   $1 - skill name (also the path segment under skills/)
-# Prints: a one-line "Generated by RepoMan ..." attribution footer.
+# Prints: a one-line "Generated by repoman ..." attribution footer (markdown link
+# when a SHA resolves, linkless otherwise).
 skill_attribution() {
   local skill_name="$1"
   # REPOMAN_SKILL_DIR lets tests pin _meta outside the shared scripts dir.
@@ -303,10 +352,12 @@ skill_attribution() {
   sha=$(resolve_skill_meta "$skill_dir" "$skill_name")
 
   if [ -n "$sha" ]; then
-    printf 'Generated by RepoMan %s@%s (https://github.com/%s/blob/%s/skills/%s/SKILL.md).' \
+    printf 'Generated by repoman [%s@%s](https://github.com/%s/blob/%s/skills/%s/SKILL.md).' \
       "$skill_name" "${sha:0:7}" "$SKILL_SOURCE_REPO" "$sha" "$skill_name"
   else
-    printf 'Generated by RepoMan %s (https://github.com/%s/blob/main/skills/%s/SKILL.md).' \
-      "$skill_name" "$SKILL_SOURCE_REPO" "$skill_name"
+    # No SHA resolved: emit a LINKLESS footer rather than an unverified blob/main
+    # link that may 404 (a skill absent from the source repo — the doc-drift case
+    # that opened automation#131, item 4). Attribution without a dead link.
+    printf 'Generated by repoman %s.' "$skill_name"
   fi
 }

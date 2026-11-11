@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Pure writer/validator for the three ~/.repoman file kinds RepoMan reads.
 #
-# Subcommands: init-config, add-repo, enable-program, set-output. Each writes
+# Subcommands: init-config, add-repo, enable-program, set-output,
+# set-requirements. Each writes
 # exactly one thing, validates it, and persists atomically (temp file in the
 # target directory, then `mv` into place, so a crash mid-write never leaves a
 # half-written JSON file).

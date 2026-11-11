@@ -57,6 +57,9 @@ scanner). The fixer exits with an error if it is unset.
 export REPOS_DIR=~/my-org
 ```
 
+Clones must live at `$REPOS_DIR/<owner>/<name>` (the layout the engine expects); a
+repo cloned flat at `$REPOS_DIR/<name>` is skipped silently.
+
 ### 4. Confirm report location
 
 Reports (including `fixer-ambiguous.json`) are saved to `$REPORTS_DIR` (default: `./reports`). **Tell the user where reports will be saved before running.**

@@ -53,7 +53,10 @@ needs them for ecosystem detection (checking which manifest files exist).
 export REPOS_DIR=~/kagenti  # directory containing cloned repos
 ```
 
-Clone each enrolled repo under `REPOS_DIR` if you don't have them yet.
+Clone each enrolled repo under `REPOS_DIR` at the `<owner>/<name>` path the engine
+expects — `gh repo clone <owner>/<name> "$REPOS_DIR/<owner>/<name>"`. A repo cloned
+flat at `$REPOS_DIR/<name>` is **skipped silently** (the scan reports zero repos with
+no error).
 
 ### 4. Confirm report location
 

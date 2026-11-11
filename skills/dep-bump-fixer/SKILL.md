@@ -63,6 +63,9 @@ export REPOS_DIR=~/my-org              # directory containing cloned repos
 export REPORTS_DIR=~/reports/dep-bump  # must contain scanner's latest.json
 ```
 
+Clones must live at `$REPOS_DIR/<owner>/<name>` (the layout the engine expects); a
+repo cloned flat at `$REPOS_DIR/<name>` is skipped silently.
+
 ## Running the Fixer
 
 **Always run with `--dry-run` first:**

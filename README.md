@@ -106,25 +106,34 @@ See the `[CHANGELOG.md](https://github.com/rossoctl/repoman/blob/main/CHANGELOG.
 
 ### Vendoring the engine
 
-`skills/repoman/scripts/` is **generated output** — a vendored copy of the
-automation engine, stamped with its source commit in
-[`_vendor.json`](skills/repoman/scripts/_vendor.json). Never edit those files
-directly: an in-place fix bypasses automation's tests and is silently
-overwritten on the next vendor. To pick up engine changes, run it from this
-repo against a **clean automation checkout** — the stamp records the source
-HEAD SHA, so vendoring uncommitted changes would produce a stamp that does not
-match the copied bytes (the script rejects a dirty source unless
-`--allow-dirty` is passed):
+Both `skills/repoman/scripts/` (the plugin bundle) and the standalone
+`skills/{link-health,dep-bump}-{scanner,fixer}/scripts/` dirs are **generated
+output** — vendored copies of the automation engine, each stamped with its
+source commit in a `_vendor.json`. Never edit those files directly: an in-place
+fix bypasses automation's tests and is silently overwritten on the next vendor.
+To pick up engine changes, run the vendor script from this repo against a
+**clean automation checkout** — the stamp records the source HEAD SHA, so
+vendoring uncommitted changes would produce a stamp that does not match the
+copied bytes (the script rejects a dirty source unless `--allow-dirty` is
+passed):
 
 ```bash
+# The plugin bundle:
 scripts/vendor-engine.sh --source <path-to-automation-checkout> \
   --dest skills/repoman/scripts
+
+# The standalone skill dirs:
+scripts/vendor-engine.sh --source <path-to-automation-checkout> \
+  --skills skills
 ```
 
-The script copies an explicit manifest (never a glob, so it cannot touch the
-standalone skills' own `scripts/`), pre-validates the whole manifest before
-copying anything, and rewrites `_vendor.json` with the automation HEAD SHA it
-vendored from. `tests/test-vendor-engine.sh` is its regression test.
+The two modes are mutually exclusive. Each copies an explicit manifest (never a
+glob): `--dest` populates only the plugin dir, and `--skills` populates only the
+listed standalone skill dirs with the modular lib set plus each skill's own
+scripts — so the script only ever writes the paths its manifests name. Both
+pre-validate the whole source set before copying anything and rewrite each
+`_vendor.json` with the automation HEAD SHA vendored from.
+`tests/test-vendor-engine.sh` is the regression test for both modes.
 
 ## License
 

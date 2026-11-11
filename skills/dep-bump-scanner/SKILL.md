@@ -44,19 +44,19 @@ The scanner acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
 to scan and **fails loud if it is missing or empty** — if you hit that error, run
 setup first (and tell the user) rather than retrying.
 
-### 3. Set REPOS_DIR and clone the enrolled repos
+### 3. Repos directory and clone layout
 
-`REPOS_DIR` is the directory holding local clones of the enrolled repos; the scanner
-needs them for ecosystem detection (checking which manifest files exist).
+The scanner reads the local clones (needed for ecosystem detection — which manifest
+files exist) from the `repos_dir` configured in `~/.repoman/config.json` (set by
+`/repoman` setup or `repoman-setup.sh init-config --repos-dir <path>`).
+`repoman_config` loads that key and **overwrites any `REPOS_DIR` in the
+environment**, so exporting it by hand has no effect — change the config value
+instead. A missing `config.json` fails loud with `ERROR: RepoMan config not found`.
 
-```bash
-export REPOS_DIR=~/kagenti  # directory containing cloned repos
-```
-
-Clone each enrolled repo under `REPOS_DIR` at the `<owner>/<name>` path the engine
-expects — `gh repo clone <owner>/<name> "$REPOS_DIR/<owner>/<name>"`. A repo cloned
-flat at `$REPOS_DIR/<name>` is **skipped silently** (the scan reports zero repos with
-no error).
+Clone each enrolled repo under that `repos_dir` at the `<owner>/<name>` path the
+engine expects — `gh repo clone <owner>/<name> "<repos_dir>/<owner>/<name>"`. A repo
+cloned flat at `<repos_dir>/<name>` is **skipped silently** (the scan reports zero
+repos with no error).
 
 ### 4. Confirm report location
 

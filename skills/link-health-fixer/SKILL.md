@@ -48,17 +48,17 @@ The fixer acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
 to act on and **fails loud if it is missing or empty** — if you hit that error, run
 setup first (and tell the user) rather than retrying.
 
-### 3. Set REPOS_DIR and clone the enrolled repos
+### 3. Repos directory and clone layout
 
-`REPOS_DIR` is the directory holding local clones of the enrolled repos (same as the
-scanner). The fixer exits with an error if it is unset.
+The fixer reads the local clones from the `repos_dir` configured in
+`~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh init-config
+--repos-dir <path>`), same as the scanner. `repoman_config` loads that key and
+**overwrites any `REPOS_DIR` in the environment**, so exporting it by hand has no
+effect — change the config value instead. A missing `config.json` fails loud with
+`ERROR: RepoMan config not found`.
 
-```bash
-export REPOS_DIR=~/my-org
-```
-
-Clones must live at `$REPOS_DIR/<owner>/<name>` (the layout the engine expects); a
-repo cloned flat at `$REPOS_DIR/<name>` is skipped silently.
+Clones must live at `<repos_dir>/<owner>/<name>` (the layout the engine expects); a
+repo cloned flat at `<repos_dir>/<name>` is skipped silently.
 
 ### 4. Confirm report location
 

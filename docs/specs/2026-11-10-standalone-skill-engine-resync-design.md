@@ -118,15 +118,20 @@ flag (dropped from the engine) and a manual "clone every org repo into `REPOS_DI
 story. The current engine:
 
 - no longer accepts `--org` (scanners take `--dry-run` and `--issue-limit` only);
-- still requires `REPOS_DIR` (the directory holding the cloned repos); and
+- reads the repos directory from `~/.repoman/config.json:repos_dir` (set via
+  `repoman-setup.sh init-config --repos-dir`). `repoman_config` loads that key and
+  **overwrites any `REPOS_DIR` in the environment**, so an environment-only
+  `export REPOS_DIR=` is inert; a missing `config.json` fails loud with
+  `ERROR: RepoMan config not found`; and
 - resolves **which** repos to act on from the enrolled set in
   `~/.repoman/repos.json` (via `repoman_load_enrolled` / `repoman_get_repos`), which
   **fails loud** when that file is missing or empty.
 
 Fix across all four:
 
-- Replace `--org <org>` examples with the current `REPOS_DIR` + enrolled-set
-  invocation.
+- Replace `--org <org>` examples with the current invocation: the repos dir comes
+  from `~/.repoman/config.json:repos_dir` (not an `export REPOS_DIR=`), clones live
+  at `<repos_dir>/<owner>/<name>`, and the enrolled set drives which repos run.
 - Add a short prerequisites note: the skill reads the enrolled set from
   `~/.repoman/repos.json` (set up via `/repoman` setup or `repoman-setup.sh`) and
   fails loud if it is absent — so an agent running the skill standalone can detect

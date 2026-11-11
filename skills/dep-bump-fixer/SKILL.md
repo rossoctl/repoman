@@ -47,24 +47,29 @@ setup first (and tell the user) rather than retrying.
 ### 3. Ensure scanner has been run
 
 The fixer discovers issues created by the dep-bump scanner. Run the scanner first if
-no `[dep-bump]` issues exist (the scanner reads the same enrolled set):
+no `[dep-bump]` issues exist (it reads the same enrolled set). The scanner lives in
+its own skill dir, not this one, so run it from there:
 
 ```bash
-REPOS_DIR=~/my-org bash scripts/dep-bump-scanner.sh
+bash ../dep-bump-scanner/scripts/dep-bump-scanner.sh
 ```
 
-### 4. Set environment variables
+### 4. Repos directory, clone layout, and report location
 
-`REPOS_DIR` is the directory holding local clones of the enrolled repos (the fixer
-needs them for config PR creation).
+The fixer reads the local clones (needed for config PR creation) from the `repos_dir`
+configured in `~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh
+init-config --repos-dir <path>`). `repoman_config` loads that key and **overwrites
+any `REPOS_DIR` in the environment**, so exporting it by hand has no effect — change
+the config value instead. A missing `config.json` fails loud with `ERROR: RepoMan
+config not found`. Clones must live at `<repos_dir>/<owner>/<name>` (the layout the
+engine expects); a repo cloned flat at `<repos_dir>/<name>` is skipped silently.
+
+`REPORTS_DIR` is a real environment variable (it must contain the scanner's
+`latest.json`):
 
 ```bash
-export REPOS_DIR=~/my-org              # directory containing cloned repos
 export REPORTS_DIR=~/reports/dep-bump  # must contain scanner's latest.json
 ```
-
-Clones must live at `$REPOS_DIR/<owner>/<name>` (the layout the engine expects); a
-repo cloned flat at `$REPOS_DIR/<name>` is skipped silently.
 
 ## Running the Fixer
 

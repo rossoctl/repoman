@@ -152,6 +152,19 @@ bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
 sk_got2=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
 if [ "$sk_got2" = "$sk_want" ]; then echo "PASS: --skills idempotent stamp sha"; else echo "FAIL: --skills idempotency $sk_got2 != $sk_want"; fail=1; fi
 
+# --skills prunes a previously-vendored file no longer in the manifest, so the
+# dir cannot drift from _vendor.json. Plant a stale script + a stale extra, then
+# re-vendor and assert both are gone while a manifest file and _vendor.json stay.
+echo "stale" > "$SK/dep-bump-scanner/scripts/old-dropped.sh"
+echo "stale" > "$SK/link-health-scanner/scripts/old-extra.py"
+bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
+if [ ! -e "$SK/dep-bump-scanner/scripts/old-dropped.sh" ] && [ ! -e "$SK/link-health-scanner/scripts/old-extra.py" ]; then
+  echo "PASS: --skills prunes stale vendored files"
+else echo "FAIL: --skills left a stale file behind"; fail=1; fi
+if [ -f "$SK/dep-bump-scanner/scripts/dep-bump-scanner.sh" ] && [ -f "$SK/dep-bump-scanner/scripts/_vendor.json" ]; then
+  echo "PASS: prune keeps manifest files and _vendor.json"
+else echo "FAIL: prune removed a kept file"; fail=1; fi
+
 # --- --skills: a source missing for ONE skill fails loud, NO dir half-vendored ---
 BAD2="$TMP/bad2"; mkdir -p "$BAD2/scripts"
 # shellcheck disable=SC2086

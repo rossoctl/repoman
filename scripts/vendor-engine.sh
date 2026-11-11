@@ -193,8 +193,21 @@ elif [ -n "$SKILLS" ]; then
       files_nl="${files_nl}${bn}
 "
     done
-    # Trim trailing newline before stamping.
-    write_vendor_stamp "$dest" "${files_nl%$'\n'}" || exit 1
+    # Trim trailing newline; this is the exact set the manifest produced.
+    intended="${files_nl%$'\n'}"
+    # Prune any previously-vendored script this manifest no longer lists, so the
+    # dir cannot drift from _vendor.json (a dropped/renamed file would otherwise
+    # linger, still sourceable, defeating the "re-running reproduces the tree"
+    # guarantee). Only vendored script types are pruned; _vendor.json is kept.
+    for existing in "$dest"/*.sh "$dest"/*.py; do
+      [ -e "$existing" ] || continue   # globs that matched nothing
+      bn=$(basename "$existing")
+      case "$intended" in
+        "$bn"|"$bn"$'\n'*|*$'\n'"$bn"|*$'\n'"$bn"$'\n'*) ;;   # listed -> keep
+        *) if ! rm "$existing"; then echo "ERROR: could not prune stale $existing" >&2; exit 1; fi ;;
+      esac
+    done
+    write_vendor_stamp "$dest" "$intended" || exit 1
     echo "Resynced $skill_dir (source $SRC_SHA)"
   done
 fi

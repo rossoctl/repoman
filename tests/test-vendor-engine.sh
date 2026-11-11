@@ -170,6 +170,22 @@ fi
 skcopied=$(find "$SKBAD" -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${skcopied:-0}" = "0" ]; then echo "PASS: no skill dir half-vendored"; else echo "FAIL: $skcopied files copied before abort"; fail=1; fi
 
+# --- --skills inherits the dirty-source and non-git guards (they run before the
+# mode branch). Locks in that a future refactor moving a guard into --dest only
+# cannot silently expose --skills to a dirty/non-git source. ---
+SKDIRTY="$TMP/skdirty"
+echo x >> "$SRC/scripts/org.sh"   # dirty the (otherwise clean) source
+if bash "$VENDOR" --source "$SRC" --skills "$SKDIRTY" >/dev/null 2>&1; then
+  echo "FAIL: --skills dirty source was not rejected"; fail=1
+else echo "PASS: --skills dirty source rejected"; fi
+if [ ! -e "$SKDIRTY" ]; then echo "PASS: --skills dirty rejection wrote nothing"; else echo "FAIL: --skills dirty rejection wrote to dest"; fail=1; fi
+git -C "$SRC" checkout -- scripts/org.sh   # restore
+SKNOGITDEST="$TMP/sknogitdest"
+if bash "$VENDOR" --source "$NOGIT" --skills "$SKNOGITDEST" >/dev/null 2>&1; then
+  echo "FAIL: --skills non-git source was not rejected"; fail=1
+else echo "PASS: --skills non-git source rejected"; fi
+if [ ! -e "$SKNOGITDEST" ]; then echo "PASS: --skills non-git rejection wrote nothing"; else echo "FAIL: --skills non-git rejection wrote to dest"; fail=1; fi
+
 # --- Mode exclusivity: --dest and --skills together is a usage error ---
 # Must be rejected specifically for being mutually exclusive, not for --skills
 # being an unknown flag (which is the pre-feature behavior).

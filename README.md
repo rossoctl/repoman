@@ -36,6 +36,31 @@ Refresh the marketplace and update the plugin (a Claude Code restart applies upd
 Updating `repoman` refreshes the bundled engine too, so engine fixes reach every user
 through a single plugin update.
 
+### A single program (standalone skill)
+
+Each program is also published as its own standalone plugin in the same marketplace, so
+you can install just one without the full `repoman` bundle or its `/repoman` entrypoint:
+
+```
+/plugin marketplace add rossoctl/repoman
+/plugin install github-pr-review@rossoctl-repoman
+```
+
+Swap `github-pr-review` for the plugin id of any program — run `/plugin` after adding
+the marketplace to see the authoritative list. The ids mostly match the
+[Programs](#programs) table, except the GitHub-facing ones carry the `github-` prefix:
+`github-pr-review` and `github-weekly-report` (the table lists them as `pr-review` and
+`weekly-report`). Installing a single program is the right choice for a one-off,
+chat-driven run (for example reviewing a single PR) or for calling an RM program from an
+external script, where the `/repoman` entrypoint isn't needed.
+
+Installing a single program skips the `/repoman` entrypoint, but most programs still
+need their own inputs at run time: `github-pr-review` and `github-weekly-report` act on
+a repo you name directly, while `link-health`, `dep-bump`, `repo-sync`, and
+`automation-health` read the enrolled set from `~/.repoman/repos.json` and
+`~/.repoman/config.json` (created by `repoman-setup.sh`) and fail loud without them.
+Each program's `SKILL.md` lists its prerequisites.
+
 ## Programs
 
 The `repoman` bundle ships these programs, each ready to enable:
@@ -51,9 +76,14 @@ The `repoman` bundle ships these programs, each ready to enable:
 | [weekly-report](skills/github-weekly-report/) | Weekly org activity reports with merged PRs, CI health, and active-epic tracking |
 | [doc-drift](skills/doc-drift-scanner/) | Scan repos for documentation drift and draft changelog notes from merged PRs ([fixer](skills/doc-drift-fixer/) re-verifies and opens mechanical doc fix PRs) |
 
-Each program is also published as its own standalone plugin, for using one on its own
-(for example a one-off PR review) without the full RepoMan setup. Run `/plugin` after
-adding the marketplace to browse the authoritative list.
+Every program also works as a **standalone skill** — usable on its own, without the
+`/repoman` entrypoint. This supports LLM chat-based one-off runs of a single program
+(for example a one-off PR review) and scriptable RM program calls from external
+tooling. (The `link-health`, `dep-bump`, `repo-sync`, and `automation-health` programs
+still read their enrolled repo set from `~/.repoman/` even when run standalone, and fail
+loud without it — see each program's `SKILL.md`.) See
+[A single program (standalone skill)](#a-single-program-standalone-skill) for how to
+install one.
 
 ## Prerequisites
 
@@ -106,25 +136,34 @@ See the `[CHANGELOG.md](https://github.com/rossoctl/repoman/blob/main/CHANGELOG.
 
 ### Vendoring the engine
 
-`skills/repoman/scripts/` is **generated output** — a vendored copy of the
-automation engine, stamped with its source commit in
-[`_vendor.json`](skills/repoman/scripts/_vendor.json). Never edit those files
-directly: an in-place fix bypasses automation's tests and is silently
-overwritten on the next vendor. To pick up engine changes, run it from this
-repo against a **clean automation checkout** — the stamp records the source
-HEAD SHA, so vendoring uncommitted changes would produce a stamp that does not
-match the copied bytes (the script rejects a dirty source unless
-`--allow-dirty` is passed):
+Both `skills/repoman/scripts/` (the plugin bundle) and the standalone
+`skills/{link-health,dep-bump}-{scanner,fixer}/scripts/` dirs are **generated
+output** — vendored copies of the automation engine, each stamped with its
+source commit in a `_vendor.json`. Never edit those files directly: an in-place
+fix bypasses automation's tests and is silently overwritten on the next vendor.
+To pick up engine changes, run the vendor script from this repo against a
+**clean automation checkout** — the stamp records the source HEAD SHA, so
+vendoring uncommitted changes would produce a stamp that does not match the
+copied bytes (the script rejects a dirty source unless `--allow-dirty` is
+passed):
 
 ```bash
+# The plugin bundle:
 scripts/vendor-engine.sh --source <path-to-automation-checkout> \
   --dest skills/repoman/scripts
+
+# The standalone skill dirs:
+scripts/vendor-engine.sh --source <path-to-automation-checkout> \
+  --skills skills
 ```
 
-The script copies an explicit manifest (never a glob, so it cannot touch the
-standalone skills' own `scripts/`), pre-validates the whole manifest before
-copying anything, and rewrites `_vendor.json` with the automation HEAD SHA it
-vendored from. `tests/test-vendor-engine.sh` is its regression test.
+The two modes are mutually exclusive. Each copies an explicit manifest (never a
+glob): `--dest` populates only the plugin dir, and `--skills` populates only the
+listed standalone skill dirs with the modular lib set plus each skill's own
+scripts — so the script only ever writes the paths its manifests name. Both
+pre-validate the whole source set before copying anything and rewrite each
+`_vendor.json` with the automation HEAD SHA vendored from.
+`tests/test-vendor-engine.sh` is the regression test for both modes.
 
 ## License
 

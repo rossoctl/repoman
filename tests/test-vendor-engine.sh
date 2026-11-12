@@ -104,4 +104,144 @@ if bash "$VENDOR" --source "$NOGIT" --dest "$NOGITDEST" --allow-dirty >/dev/null
   echo "FAIL: non-git source accepted with --allow-dirty"; fail=1
 else echo "PASS: non-git source rejected even with --allow-dirty"; fi
 
+# --- Standalone --skills mode: each dir gets exactly its manifest set ---
+# link-check.py is a link-health-scanner extra not already in the fake source.
+echo "# py" > "$SRC/scripts/link-check.py"
+git -C "$SRC" -c user.email=t@t -c user.name=t add -A
+git -C "$SRC" -c user.email=t@t -c user.name=t commit -qm link-check
+SK="$TMP/skills"
+if ! bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1; then
+  echo "FAIL: --skills vendor returned non-zero"; fail=1
+fi
+SKILL_LIB="program-lib core github-api fork org repoman-requirements"
+check_skill_dir() { # <skill-dir> <file…>  (files are basenames incl. extension)
+  local dir="$1"; shift
+  local d="$SK/$dir/scripts" ok=1 f
+  for f in $SKILL_LIB; do
+    [ -f "$d/$f.sh" ] || { ok=0; echo "  missing $dir/$f.sh"; }
+  done
+  for f in "$@"; do
+    [ -f "$d/$f" ] || { ok=0; echo "  missing $dir/$f"; }
+  done
+  [ -f "$d/_vendor.json" ] || { ok=0; echo "  missing $dir/_vendor.json"; }
+  if [ "$ok" = 1 ]; then echo "PASS: $dir populated"; else echo "FAIL: $dir incomplete"; fail=1; fi
+}
+check_skill_dir link-health-scanner link-health-scanner.sh extract-broken-links.sh link-check.py
+check_skill_dir link-health-fixer link-health-fixer.sh
+check_skill_dir dep-bump-scanner dep-bump-scanner.sh
+check_skill_dir dep-bump-fixer dep-bump-fixer.sh
+# dep-bump-fixer must NOT co-locate dep-bump-scanner.sh (docs-only reference)
+if [ -f "$SK/dep-bump-fixer/scripts/dep-bump-scanner.sh" ]; then
+  echo "FAIL: dep-bump-fixer should not co-locate dep-bump-scanner.sh"; fail=1
+else
+  echo "PASS: dep-bump-fixer has no scanner co-location"
+fi
+# Per-dir stamp: source_sha == source HEAD, and files list is dir-specific.
+sk_want=$(git -C "$SRC" rev-parse HEAD)
+sk_got=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
+if [ "$sk_got" = "$sk_want" ]; then echo "PASS: per-dir stamp sha == source HEAD"; else echo "FAIL: per-dir stamp sha $sk_got != $sk_want"; fail=1; fi
+# link-health-scanner stamp lists link-check.py; dep-bump-scanner stamp does not.
+if jq -e '.files | index("link-check.py")' "$SK/link-health-scanner/scripts/_vendor.json" >/dev/null 2>&1 \
+   && ! jq -e '.files | index("link-check.py")' "$SK/dep-bump-scanner/scripts/_vendor.json" >/dev/null 2>&1; then
+  echo "PASS: per-dir files list is skill-specific"
+else
+  echo "FAIL: per-dir files list not skill-specific"; fail=1
+fi
+# Idempotency: rerun => same source_sha + same files list for a dir.
+bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
+sk_got2=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
+if [ "$sk_got2" = "$sk_want" ]; then echo "PASS: --skills idempotent stamp sha"; else echo "FAIL: --skills idempotency $sk_got2 != $sk_want"; fail=1; fi
+
+# --skills prunes ONLY a file the tool previously vendored (listed in the old
+# _vendor.json .files) that the manifest no longer lists -- so the dir cannot
+# drift from the stamp -- but LEAVES a file the tool never wrote (a hand-added
+# helper), since the mode only removes paths it owns.
+pd="$SK/dep-bump-scanner/scripts"
+# (a) Simulate a previously-vendored-then-dropped file: add it to the stamp's
+#     .files AND to disk, as a prior run would have left it.
+echo "was vendored" > "$pd/old-vendored.sh"
+tmpj=$(jq '.files += ["old-vendored.sh"]' "$pd/_vendor.json") && printf '%s\n' "$tmpj" > "$pd/_vendor.json"
+# (b) A hand-added helper that was never vendored (absent from .files).
+echo "hand added" > "$pd/my-helper.sh"
+bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
+if [ ! -e "$pd/old-vendored.sh" ]; then
+  echo "PASS: --skills prunes a dropped previously-vendored file"
+else echo "FAIL: --skills left a dropped vendored file behind"; fail=1; fi
+if [ -f "$pd/my-helper.sh" ]; then
+  echo "PASS: --skills keeps a hand-added (never-vendored) file"
+else echo "FAIL: --skills deleted a file it never vendored"; fail=1; fi
+if [ -f "$pd/dep-bump-scanner.sh" ] && [ -f "$pd/_vendor.json" ]; then
+  echo "PASS: prune keeps manifest files and _vendor.json"
+else echo "FAIL: prune removed a kept file"; fail=1; fi
+rm -f "$pd/my-helper.sh"   # don't let it perturb later assertions on this dir
+
+# A tampered stamp whose .files entry escapes the skill dir must be refused, not
+# obeyed: the prune's rm would otherwise delete outside $dest (path traversal).
+canary="$SK/CANARY-do-not-delete"
+echo "canary" > "$canary"
+tmpj=$(jq '.files += ["../../CANARY-do-not-delete"]' "$pd/_vendor.json") && printf '%s\n' "$tmpj" > "$pd/_vendor.json"
+if bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1; then
+  echo "FAIL: --skills accepted a non-basename stamp entry"; fail=1
+else echo "PASS: --skills refuses a non-basename stamp entry"; fi
+if [ -f "$canary" ]; then echo "PASS: path-traversal prune did not escape the skill dir"; else echo "FAIL: prune deleted a file outside the skill dir"; fail=1; fi
+rm -f "$canary"
+
+# --- --skills: a source missing for ONE skill fails loud, NO dir half-vendored ---
+BAD2="$TMP/bad2"; mkdir -p "$BAD2/scripts"
+# shellcheck disable=SC2086
+for f in $MANIFEST; do echo "#!/usr/bin/env bash" > "$BAD2/scripts/$f.sh"; done
+echo "# py" > "$BAD2/scripts/link-check.py"
+rm "$BAD2/scripts/dep-bump-fixer.sh"   # one skill's own script missing
+git -C "$BAD2" init -q
+git -C "$BAD2" -c user.email=t@t -c user.name=t add -A
+git -C "$BAD2" -c user.email=t@t -c user.name=t commit -qm init
+SKBAD="$TMP/skbad"
+if bash "$VENDOR" --source "$BAD2" --skills "$SKBAD" >/dev/null 2>&1; then
+  echo "FAIL: missing skill source should fail loud"; fail=1
+else
+  echo "PASS: missing skill source fails loud"
+fi
+skcopied=$(find "$SKBAD" -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${skcopied:-0}" = "0" ]; then echo "PASS: no skill dir half-vendored"; else echo "FAIL: $skcopied files copied before abort"; fail=1; fi
+
+# --- --skills inherits the dirty-source and non-git guards (they run before the
+# mode branch). Locks in that a future refactor moving a guard into --dest only
+# cannot silently expose --skills to a dirty/non-git source. ---
+SKDIRTY="$TMP/skdirty"
+echo x >> "$SRC/scripts/org.sh"   # dirty the (otherwise clean) source
+if bash "$VENDOR" --source "$SRC" --skills "$SKDIRTY" >/dev/null 2>&1; then
+  echo "FAIL: --skills dirty source was not rejected"; fail=1
+else echo "PASS: --skills dirty source rejected"; fi
+if [ ! -e "$SKDIRTY" ]; then echo "PASS: --skills dirty rejection wrote nothing"; else echo "FAIL: --skills dirty rejection wrote to dest"; fail=1; fi
+git -C "$SRC" checkout -- scripts/org.sh   # restore
+SKNOGITDEST="$TMP/sknogitdest"
+if bash "$VENDOR" --source "$NOGIT" --skills "$SKNOGITDEST" >/dev/null 2>&1; then
+  echo "FAIL: --skills non-git source was not rejected"; fail=1
+else echo "PASS: --skills non-git source rejected"; fi
+if [ ! -e "$SKNOGITDEST" ]; then echo "PASS: --skills non-git rejection wrote nothing"; else echo "FAIL: --skills non-git rejection wrote to dest"; fail=1; fi
+
+# --- Mode exclusivity: --dest and --skills together is a usage error ---
+# Must be rejected specifically for being mutually exclusive, not for --skills
+# being an unknown flag (which is the pre-feature behavior).
+excl_err=$(bash "$VENDOR" --source "$SRC" --dest "$DEST" --skills "$TMP/sk" 2>&1)
+excl_rc=$?
+if [ "$excl_rc" != "0" ] && printf '%s' "$excl_err" | grep -qi 'mutually exclusive'; then
+  echo "PASS: --dest + --skills rejected as mutually exclusive"
+else
+  echo "FAIL: --dest + --skills not rejected for exclusivity (rc=$excl_rc, msg=$excl_err)"; fail=1
+fi
+# --- --skills alone is an accepted flag (not 'unknown arg') ---
+sk_err=$(bash "$VENDOR" --source "$SRC" --skills "$TMP/skflag" 2>&1 || true)
+if printf '%s' "$sk_err" | grep -qi 'unknown arg'; then
+  echo "FAIL: --skills still treated as unknown arg: $sk_err"; fail=1
+else
+  echo "PASS: --skills is a recognized flag"
+fi
+# --- A value-taking flag with no value must fail, not hang (clawgenti #26) ---
+if bash "$VENDOR" --source "$SRC" --skills >/dev/null 2>&1; then
+  echo "FAIL: --skills with no value should be a usage error"; fail=1
+else
+  echo "PASS: --skills with no value is rejected (no hang)"
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS" || { echo "FAILURES"; exit 1; }

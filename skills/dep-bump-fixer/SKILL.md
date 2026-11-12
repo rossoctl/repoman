@@ -37,30 +37,38 @@ gh auth status
 
 Ensure the token has access to the target org's repos, PRs, and issues.
 
-### 2. Ensure repos are cloned
+### 2. Enrolled repo set (`~/.repoman/repos.json`)
 
-The fixer needs local clones for config PR creation. If repos are not cloned:
-
-```bash
-export REPOS_DIR=~/my-org
-mkdir -p "$REPOS_DIR"
-gh repo list <org> --limit 100 --json nameWithOwner --jq '.[].nameWithOwner' | while read -r repo; do
-  gh repo clone "$repo" "$REPOS_DIR/$(basename "$repo")" -- --depth 1 2>/dev/null || true
-done
-```
+The fixer acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
+`/repoman` setup (or `repoman-setup.sh`). It reads that file to decide which repos
+to act on and **fails loud if it is missing or empty** — if you hit that error, run
+setup first (and tell the user) rather than retrying.
 
 ### 3. Ensure scanner has been run
 
-The fixer discovers issues created by the dep-bump scanner. Run the scanner first if no `[dep-bump]` issues exist:
+The fixer discovers issues created by the dep-bump scanner. Run the scanner first if
+no `[dep-bump]` issues exist (it reads the same enrolled set). The scanner lives in
+its own skill dir, not this one, so run it from there:
 
 ```bash
-REPOS_DIR=~/my-org bash scripts/dep-bump-scanner.sh --org <org>
+bash ../dep-bump-scanner/scripts/dep-bump-scanner.sh
 ```
 
-### 4. Set environment variables
+### 4. Repos directory, clone layout, and report location
+
+The fixer reads the local clones (needed for config PR creation) from the `repos_dir`
+configured in `~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh
+init-config --repos-dir <path> --fork-owner <owner>`, both flags required;
+`--repos-dir` must already exist). `repoman_config` loads that key and **overwrites
+any `REPOS_DIR` in the environment**, so exporting it by hand has no effect — change
+the config value instead. A missing `config.json` fails loud with `ERROR: RepoMan
+config not found`. Clones must live at `<repos_dir>/<owner>/<name>` (the layout the
+engine expects); a repo cloned flat at `<repos_dir>/<name>` is skipped silently.
+
+`REPORTS_DIR` is a real environment variable (it must contain the scanner's
+`latest.json`):
 
 ```bash
-export REPOS_DIR=~/my-org            # directory containing cloned repos
 export REPORTS_DIR=~/reports/dep-bump  # must contain scanner's latest.json
 ```
 
@@ -69,7 +77,7 @@ export REPORTS_DIR=~/reports/dep-bump  # must contain scanner's latest.json
 **Always run with `--dry-run` first:**
 
 ```bash
-bash scripts/dep-bump-fixer.sh --dry-run --org <org>
+bash scripts/dep-bump-fixer.sh --dry-run
 ```
 
 This analyzes issues and previews comments without posting.
@@ -77,13 +85,13 @@ This analyzes issues and previews comments without posting.
 **Live run with issue limit:**
 
 ```bash
-bash scripts/dep-bump-fixer.sh --live --org <org> --issue-limit 3
+bash scripts/dep-bump-fixer.sh --live --issue-limit 3
 ```
 
 **Full live run:**
 
 ```bash
-bash scripts/dep-bump-fixer.sh --live --org <org>
+bash scripts/dep-bump-fixer.sh --live
 ```
 
 ## Interpreting Output

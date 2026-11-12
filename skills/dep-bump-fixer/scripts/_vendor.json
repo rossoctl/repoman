@@ -1,0 +1,14 @@
+{
+  "source_repo": "rossoctl/automation",
+  "source_sha": "c138e5f7a4fea6b8ba6bbb84558374f81cc6915f",
+  "vendored_at": "2026-11-10T21:03:00Z",
+  "files": [
+    "program-lib.sh",
+    "core.sh",
+    "github-api.sh",
+    "fork.sh",
+    "org.sh",
+    "repoman-requirements.sh",
+    "dep-bump-fixer.sh"
+  ]
+}

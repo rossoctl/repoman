@@ -41,34 +41,42 @@ The authenticated account needs:
 - Write access to create issues and comments
 - Fork permissions (to create fix PRs from a fork account)
 
-### 2. Ensure repos are cloned
+### 2. Enrolled repo set (`~/.repoman/repos.json`)
 
-Same as the scanner -- all org repos must be cloned into `$REPOS_DIR`.
+The fixer acts on the enrolled repo set in `~/.repoman/repos.json`, set up via
+`/repoman` setup (or `repoman-setup.sh`). It reads that file to decide which repos
+to act on and **fails loud if it is missing or empty** — if you hit that error, run
+setup first (and tell the user) rather than retrying.
 
-### 3. Set REPOS_DIR
+### 3. Repos directory and clone layout
 
-```bash
-export REPOS_DIR=~/my-org
-```
+The fixer reads the local clones from the `repos_dir` configured in
+`~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh init-config
+--repos-dir <path> --fork-owner <owner>`, both flags required; `--repos-dir` must
+already exist), same as the scanner. `repoman_config` loads that key and
+**overwrites any `REPOS_DIR` in the environment**, so exporting it by hand has no
+effect — change the config value instead. A missing `config.json` fails loud with
+`ERROR: RepoMan config not found`.
 
-This is required. The script will exit with an error if not set.
+Clones must live at `<repos_dir>/<owner>/<name>` (the layout the engine expects); a
+repo cloned flat at `<repos_dir>/<name>` is skipped silently.
 
 ### 4. Confirm report location
 
-Reports (including `fixer-ambiguous.json`) are saved to `$REPORTS_DIR` (default: `./reports`). **Tell the user where reports will be saved before running.**
+Reports (including `fixer-ambiguous.json`) are saved to `$REPORTS_DIR` (default: `$HOME/reports/link-health`). **Tell the user where reports will be saved before running.**
 
 ## Running the Fixer
 
 **The fixer defaults to `--dry-run` mode.** This is intentional -- it shows what would be fixed without creating PRs.
 
 ```bash
-bash scripts/link-health-fixer.sh --dry-run --issue-limit 3 --org <org>
+bash scripts/link-health-fixer.sh --dry-run --issue-limit 3
 ```
 
 Review the dry-run output. If fixes look correct, ask the user if they want a live run:
 
 ```bash
-bash scripts/link-health-fixer.sh --live --issue-limit 5 --org <org>
+bash scripts/link-health-fixer.sh --live --issue-limit 5
 ```
 
 ## Interpreting Output

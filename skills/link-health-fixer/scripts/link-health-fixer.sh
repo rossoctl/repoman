@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# =============================================================================
-# Link Health Fixer
-# Reads scanner-created issues, re-verifies broken links, attempts fixes for
-# internal links, and analyzes external links.
-#
-# Usage:
-#   bash link-health-fixer.sh --help
-#   bash link-health-fixer.sh --dry-run --issue-limit 3
-#   bash link-health-fixer.sh --live --org myorg
-# =============================================================================
+# Link Health Fixer -- Phase 2
+# Reads scanner-created issues, re-verifies broken links, attempts fixes for internal links.
+# Outputs PR previews in dry-run mode; creates fork-based PRs when --live is passed.
 
 # --- Load shared library ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/program-lib.sh"
 
+# --- Configuration ---
+REPORTS_DIR="${REPORTS_DIR:-$HOME/reports/link-health}"
+
+# Provenance footer for fix-PR bodies. Resolved once at startup: the helper
+# lazily writes _meta.<skill>.json beside this skill and returns the pinned-SHA
+# attribution (linkless fallback when the SHA cannot be resolved).
+SKILL_FOOTER=$(skill_attribution "link-health-fixer")
+
+FIX_DATE=$(date +%Y-%m-%d)
+SCAN_DATE=$(date +%Y-%m-%d)
+
+# DCO sign-off identity for fix PRs (maintainer, not bot)
+GIT_AUTHOR_NAME="Gloire Rubambiza"
+GIT_AUTHOR_EMAIL="gloire@ibm.com"
+export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+
 # --- CLI args ---
 DRY_RUN=true
 ISSUE_LIMIT=5
 VERBOSE=false
-ORG="kagenti"
-FORK_OWNER="clawgenti"
-SHOW_HELP=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -31,64 +39,21 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=true; shift ;;
     --issue-limit) ISSUE_LIMIT="$2"; shift 2 ;;
     --verbose) VERBOSE=true; shift ;;
-    --org) ORG="$2"; shift 2 ;;
-    --fork-owner) FORK_OWNER="$2"; shift 2 ;;
-    --help|-h) SHOW_HELP=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
 
-if [ "$SHOW_HELP" = true ]; then
-  cat << 'USAGE'
-link-health-fixer -- Re-verify and fix broken links from scanner issues
-
-USAGE:
-  link-health-fixer.sh [OPTIONS]
-
-OPTIONS:
-  --dry-run         Preview fixes without creating PRs (default)
-  --live            Create fork-based PRs for fixes
-  --issue-limit N   Process at most N issues per run (default: 5)
-  --verbose         Print extra diagnostics
-  --org NAME        GitHub org (default: kagenti)
-  --fork-owner NAME Account to fork repos under (default: clawgenti)
-  --help, -h        Show this help
-
-ENVIRONMENT:
-  REPOS_DIR         (required) Directory containing cloned org repos
-  REPORTS_DIR       (optional) Where to write reports (default: ./reports)
-
-PREREQUISITES:
-  bash 4+, gh (authenticated), jq, curl
-USAGE
-  exit 0
-fi
-
-# --- Configuration ---
-validate_repos_dir "${REPOS_DIR:-}"
-
-REPORTS_DIR="${REPORTS_DIR:-./reports}"
-FIX_DATE=$(date +%Y-%m-%d)
-SCAN_DATE=$(date +%Y-%m-%d)
-
-# DCO sign-off identity for fix PRs
-GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-Link Health Fixer}"
-GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-noreply@kagenti.org}"
-export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL
-export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
-export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+# Resolve deployment constants (repos_dir, fork_owner) from ~/.repoman/config.json.
+repoman_config
 
 # --- Workspace setup ---
 setup_workspace "link-fixer"
 TMPDIR="$PROGRAM_TMPDIR"
-mkdir -p "$REPORTS_DIR"
 
 echo "=== Link Health Fixer $FIX_DATE ==="
-echo "Org: $ORG"
 echo "Repos dir: $REPOS_DIR"
-echo "Reports dir: $REPORTS_DIR"
 if [ "$DRY_RUN" = true ]; then
-  echo "Mode: DRY RUN (no PRs created)"
+  echo "Mode: DRY RUN (no PRs, re-verified issues will still be closed)"
 else
   echo "Mode: LIVE (PRs will be created)"
 fi
@@ -101,14 +66,15 @@ echo "=== Step 1: Gathering open scanner issues ==="
 ISSUES_FILE="$TMPDIR/issues.jsonl"
 : > "$ISSUES_FILE"
 
-for repo_dir in "$REPOS_DIR"/*/ "$REPOS_DIR"/.github/; do
-  [ -d "$repo_dir" ] || continue
-  repo_name=$(basename "$repo_dir")
-  if [[ "$repo_name" == .* && "$repo_name" != ".github" ]] || [ ! -d "$repo_dir/.git" ]; then
-    continue
-  fi
+# Drive the loop from the enrolled set (authoritative), statting each clone,
+# rather than globbing "$REPOS_DIR"/*/ and filtering -- a "*/" glob silently
+# drops a ".github" repo. enrolled_clone_dirs emits each enrolled owner/name
+# whose clone exists; the here-string keeps the body in the current shell.
+ENROLLED=$(repoman_load_enrolled) || exit 1
+CLONES=$(enrolled_clone_dirs "$ENROLLED")
 
-  full_repo="$ORG/$repo_name"
+while IFS= read -r full_repo; do
+  [ -n "$full_repo" ] || continue
 
   issues_json=$(gh issue list --repo "$full_repo" \
     --search "Broken link in:title" \
@@ -118,7 +84,7 @@ for repo_dir in "$REPOS_DIR"/*/ "$REPOS_DIR"/.github/; do
   # Add repository info since gh issue list doesn't include it
   echo "$issues_json" | jq -c --arg repo "$full_repo" \
     '.[] | . + {repository: {nameWithOwner: $repo}}' >> "$ISSUES_FILE" 2>/dev/null || true
-done
+done <<< "$CLONES"
 
 TOTAL_ISSUES=$(wc -l < "$ISSUES_FILE" | tr -d ' ')
 echo "Found $TOTAL_ISSUES open scanner issues"
@@ -276,11 +242,13 @@ while IFS= read -r item; do
     continue
   fi
 
-  # Extract target repo and path from URL
+  # Extract target owner, repo, and path from URL
+  target_org=""
   target_repo_name=""
   target_path=""
 
   if echo "$broken_url" | grep -qE 'github\.com/[^/]+/[^/]+/(blob|tree)/'; then
+    target_org=$(echo "$broken_url" | sed -nE 's#.*github\.com/([^/]+)/.*#\1#p')
     target_repo_name=$(echo "$broken_url" | sed -nE 's#.*github\.com/[^/]+/([^/]+)/.*#\1#p')
     target_path=$(echo "$broken_url" | sed -E 's#.*/((blob|tree))/[^/]+/##')
   else
@@ -289,9 +257,12 @@ while IFS= read -r item; do
     continue
   fi
 
-  target_repo_dir="$REPOS_DIR/$target_repo_name"
+  # Owner-namespaced clone layout: the target clone lives at
+  # $REPOS_DIR/<owner>/<name>, so the owner parsed from the URL is required
+  # to locate it. A bare-name join would miss it and mark the link unfixable.
+  target_repo_dir="$REPOS_DIR/$target_org/$target_repo_name"
   if [ ! -d "$target_repo_dir/.git" ]; then
-    echo "  #$number: Target repo $target_repo_name not cloned locally, skipping"
+    echo "  #$number: Target repo $target_org/$target_repo_name not cloned locally, skipping"
     UNFIXABLE_COUNT=$((UNFIXABLE_COUNT + 1))
     continue
   fi
@@ -306,6 +277,7 @@ while IFS= read -r item; do
     --format="%H" -- "$target_path" 2>/dev/null | head -1 || true)
 
   if [ -n "$rename_result" ]; then
+    # Find what the file was renamed to
     new_path=$(cd "$target_repo_dir" && git diff-tree --no-commit-id -r --diff-filter=R \
       "$rename_result" 2>/dev/null | grep "$filename" | awk '{print $NF}' | head -1 || true)
     [ -n "$new_path" ] && [ -f "$target_repo_dir/$new_path" ] || new_path=""
@@ -322,7 +294,7 @@ while IFS= read -r item; do
     if [ "$candidate_count" -eq 1 ] && [ -n "$candidates" ]; then
       new_path="$candidates"
     elif [ "$candidate_count" -gt 1 ]; then
-      # Score candidates by path-suffix match
+      # Score candidates by path-prefix match
       best=$(pick_best_candidate "$target_path" "$candidates" 1) || true
       if [ -n "$best" ]; then
         echo "    Scored best candidate: $best"
@@ -347,7 +319,7 @@ while IFS= read -r item; do
     fi
   fi
 
-  # Strategy 3: find by filename without extension
+  # Strategy 3: find by filename without extension (for .mdx -> .md or vice versa)
   if [ -z "$new_path" ]; then
     basename_no_ext="${filename%.*}"
     candidates=$(cd "$target_repo_dir" && find . -name "${basename_no_ext}.*" -type f \
@@ -359,7 +331,7 @@ while IFS= read -r item; do
     if [ "$candidate_count" -eq 1 ] && [ -n "$candidates" ]; then
       new_path="$candidates"
     elif [ "$candidate_count" -gt 1 ]; then
-      # Score candidates by path-suffix match
+      # Score candidates by path-prefix match
       best=$(pick_best_candidate "$target_path" "$candidates" 1) || true
       if [ -n "$best" ]; then
         echo "    Scored best candidate: $best"
@@ -388,6 +360,7 @@ while IFS= read -r item; do
     echo "    No candidates found, marking unfixable"
     UNFIXABLE_COUNT=$((UNFIXABLE_COUNT + 1))
 
+    # Comment on the issue
     gh issue comment "$number" --repo "$repo" \
       --body "Unable to find an automated fix: file \`$target_path\` not found in \`$target_repo_name\` (searched for renames, filename matches, and extension variants). This may require manual investigation." \
       2>/dev/null || echo "    WARN: Failed to comment on issue #$number"
@@ -398,7 +371,7 @@ while IFS= read -r item; do
   # Build new URL (BSD-compatible)
   target_ref=$(echo "$broken_url" | sed -nE 's#.*(blob|tree)/([^/]+)/.*#\2#p')
   url_type=$(echo "$broken_url" | sed -nE 's#.*(blob|tree)/.*#\1#p')
-  target_org=$(echo "$broken_url" | sed -nE 's#.*github\.com/([^/]+)/.*#\1#p')
+  # target_org was already parsed from $broken_url above.
   new_url="https://github.com/$target_org/$target_repo_name/$url_type/$target_ref/$new_path"
 
   # Verify the new path exists
@@ -410,13 +383,14 @@ while IFS= read -r item; do
 
   echo "    FIX: $target_path -> $new_path"
 
-  # Determine which repo contains the source file that needs editing
-  source_repo_name="${repo#"$ORG/"}"
-
+  # $repo is already the full "owner/name" (from the enrolled-repo scan loop),
+  # so it carries the full ref straight through to .source_repo -- which is
+  # grouped and compared as a full ref downstream (Step 5). No alias: passing a
+  # separate bare-vs-full-named copy is exactly the shape mismatch to avoid.
   jq -nc \
     --arg number "$number" \
     --arg repo "$repo" \
-    --arg source_repo "$source_repo_name" \
+    --arg source_repo "$repo" \
     --arg source_file "$source_file" \
     --arg old_url "$broken_url" \
     --arg new_url "$new_url" \
@@ -445,10 +419,14 @@ else
 
   for fix_repo in $repos_with_fixes; do
     echo ""
-    echo "--- Repo: $ORG/$fix_repo ---"
+    echo "--- Repo: $fix_repo ---"
+
+    # fix_repo is "owner/name" (from the enrolled-repo scan loop). Derive the
+    # bare name for filesystem/branch/remote tokens that must not contain "/".
+    fix_repo_name="${fix_repo#*/}"
 
     fix_repo_dir="$REPOS_DIR/$fix_repo"
-    FIX_BRANCH="fix/broken-links-${fix_repo}-${FIX_DATE}"
+    FIX_BRANCH="fix/broken-links-${fix_repo_name}-${FIX_DATE}"
 
     # Collect fixes for this repo
     repo_fixes=$(jq -c "select(.source_repo == \"$fix_repo\")" "$FIXES_FILE")
@@ -457,9 +435,9 @@ else
 
     if [ "$DRY_RUN" = true ]; then
       echo ""
-      echo "[DRY RUN] PR Preview for $ORG/$fix_repo:"
+      echo "[DRY RUN] PR Preview for $fix_repo:"
       echo "  Branch: $FIX_BRANCH"
-      echo "  Title: docs: Fix $fix_count broken internal link(s) in $fix_repo"
+      echo "  Title: docs: Fix $fix_count broken internal link(s) in $fix_repo_name"
       echo "  Changes:"
 
       echo "$repo_fixes" | while IFS= read -r fix; do
@@ -470,26 +448,45 @@ else
         echo "      - $old_url"
         echo "      + $new_url"
       done
+
+      echo ""
+      echo "  Body:"
+      echo "    Automated fix by RepoMan Link Health Fixer."
+      echo "    Broken internal links updated to point to current file locations."
+      echo ""
+      echo "    | File | Old URL | New URL |"
+      echo "    |------|---------|---------|"
+      echo "$repo_fixes" | while IFS= read -r fix; do
+        src_file=$(echo "$fix" | jq -r '.source_file')
+        old_path=$(echo "$fix" | jq -r '.old_path')
+        new_path=$(echo "$fix" | jq -r '.new_path')
+        echo "    | \`$src_file\` | \`$old_path\` | \`$new_path\` |"
+      done
     else
       # --- LIVE MODE ---
       cd "$fix_repo_dir"
 
-      ensure_fork "$ORG" "$fix_repo" "$FORK_OWNER"
+      # Fork on demand (uses shared library)
+      ensure_fork "${fix_repo%%/*}" "${fix_repo#*/}" "$FORK_OWNER"
 
-      FORK_REMOTE="${FORK_OWNER}-${fix_repo}-fork"
+      # Set up remote
+      FORK_REMOTE="clawgenti-${fix_repo_name}-fork"
       if ! git remote get-url "$FORK_REMOTE" &>/dev/null 2>&1; then
-        git remote add "$FORK_REMOTE" "https://github.com/$FORK_OWNER/${fix_repo}.git"
+        git remote add "$FORK_REMOTE" "https://github.com/$FORK_OWNER/${fix_repo_name}.git"
       fi
 
+      # Create branch from fork's main
       git fetch "$FORK_REMOTE" main 2>/dev/null || true
       git checkout -B "$FIX_BRANCH" "$FORK_REMOTE/main" 2>/dev/null || git checkout -B "$FIX_BRANCH"
 
+      # Apply each fix
       echo "$repo_fixes" | while IFS= read -r fix; do
         src_file=$(echo "$fix" | jq -r '.source_file')
         old_url=$(echo "$fix" | jq -r '.old_url')
         new_url=$(echo "$fix" | jq -r '.new_url')
 
         if [ -f "$src_file" ]; then
+          # Escape URLs for sed
           old_escaped=$(printf '%s\n' "$old_url" | sed 's/[&/\]/\\&/g')
           new_escaped=$(printf '%s\n' "$new_url" | sed 's/[&/\]/\\&/g')
           sed -i "s|$old_escaped|$new_escaped|g" "$src_file"
@@ -499,19 +496,22 @@ else
         fi
       done
 
-      git commit -s -m "docs: Fix broken internal links in $fix_repo
+      # Commit
+      git commit -s -m "docs: Fix broken internal links in $fix_repo_name
 
-Automated fix by Link Health Fixer ($FIX_DATE)." 2>/dev/null || {
+Automated fix by RepoMan Link Health Fixer ($FIX_DATE)." 2>/dev/null || {
         echo "  No changes to commit"
         continue
       }
 
+      # Push
       git push "$FORK_REMOTE" "$FIX_BRANCH" 2>/dev/null || {
         echo "  WARN: Failed to push to fork"
         continue
       }
 
-      pr_body="Automated fix by Link Health Fixer.
+      # Create PR
+      pr_body="Automated fix by RepoMan Link Health Fixer.
 Broken internal links updated to point to current file locations.
 
 | File | Old Path | New Path |
@@ -525,9 +525,16 @@ Broken internal links updated to point to current file locations.
 | \`$src_file\` | \`$old_path\` | \`$new_path\` |"
       done <<< "$repo_fixes"
 
-      pr_url=$(gh pr create --repo "$ORG/$fix_repo" \
+      # Breadcrumb footer linking back to the program's canonical skill, so a
+      # reader on the target repo can find what generated this PR. Mirrors the
+      # scanner's footer (link-health-scanner.sh).
+      pr_body="$pr_body
+
+$SKILL_FOOTER"
+
+      pr_url=$(gh pr create --repo "$fix_repo" \
         --head "$FORK_OWNER:$FIX_BRANCH" --base main \
-        --title "docs: Fix $fix_count broken internal link(s) in $fix_repo" \
+        --title "docs: Fix $fix_count broken internal link(s) in $fix_repo_name" \
         --body "$pr_body" 2>/dev/null) || {
         echo "  WARN: Failed to create PR"
         continue
@@ -535,16 +542,18 @@ Broken internal links updated to point to current file locations.
 
       echo "  PR created: $pr_url"
 
+      # Comment on each issue with the PR link
       echo "$repo_fixes" | while IFS= read -r fix; do
         issue_num=$(echo "$fix" | jq -r '.number')
         src_file=$(echo "$fix" | jq -r '.source_file')
         new_path=$(echo "$fix" | jq -r '.new_path')
-        gh issue comment "$issue_num" --repo "$ORG/$fix_repo" \
+        gh issue comment "$issue_num" --repo "$fix_repo" \
           --body "Fix submitted: $pr_url. The broken link in \`$src_file\` has been updated to point to \`$new_path\`." \
           2>/dev/null || echo "  WARN: Failed to comment on issue #$issue_num"
         sleep 1
       done
 
+      # Return to main
       git checkout main 2>/dev/null || true
     fi
   done
@@ -566,7 +575,7 @@ while IFS= read -r item; do
   broken_url=$(echo "$item" | jq -r '.url')
   source_file=$(echo "$item" | jq -r '.file')
 
-  # Skip issues that already have an open fix PR
+  # Skip issues that already have an open fix PR (don't count toward limit)
   if covering_pr=$(issue_has_open_pr "$repo" "$number" "$source_file" "$broken_url"); then
     echo "  #$number: Open PR #$covering_pr already covers, skipping"
     continue
@@ -581,6 +590,7 @@ while IFS= read -r item; do
 
   if [ "$final_status" = "200" ]; then
     if [ "$final_url" = "$broken_url" ]; then
+      # Link resolves at same URL -- close the issue
       echo "    Link now resolves (200 at original URL)"
       if close_issue_if_valid "$repo" "$number" \
         "Link now resolves as of $FIX_DATE. Verified by Link Health Fixer. Closing."; then
@@ -591,6 +601,7 @@ while IFS= read -r item; do
       sleep 1
       continue
     else
+      # Link moved -- report replacement but don't close
       echo "    Link moved (200 at different URL): $final_url"
       redirect_finding="Redirects to: \`$final_url\`"
       suggested_replacement="\`$final_url\` -- this is where the original URL now redirects."
@@ -609,6 +620,7 @@ while IFS= read -r item; do
   wayback_date=$(echo "$wayback_json" | jq -r '.archived_snapshots.closest.timestamp // empty' 2>/dev/null || true)
 
   if [ -n "$wayback_url" ]; then
+    # Format timestamp (YYYYMMDDHHMMSS -> YYYY-MM-DD)
     wb_formatted="${wayback_date:0:4}-${wayback_date:4:2}-${wayback_date:6:2}"
     wayback_finding="Archived version available from $wb_formatted: $wayback_url"
     if [ -z "$suggested_replacement" ]; then
@@ -622,6 +634,7 @@ while IFS= read -r item; do
     suggested_replacement="No automated replacement found. Manual investigation needed."
   fi
 
+  # Build comment
   comment_body="## External Link Analysis
 
 **URL:** \`$broken_url\`
@@ -636,14 +649,16 @@ while IFS= read -r item; do
 $suggested_replacement
 
 ---
-*Analyzed by Link Health Fixer ($FIX_DATE)*"
+*Analyzed by RepoMan Link Health Fixer ($FIX_DATE)*"
 
+  # Post comment
   if gh issue comment "$number" --repo "$repo" --body "$comment_body" 2>/dev/null; then
     echo "    Comment posted"
   else
     echo "    WARN: Failed to comment on issue #$number"
   fi
 
+  # Label unfixable if no redirect and no wayback
   if [ "$final_status" != "200" ] && [ -z "$wayback_url" ]; then
     gh issue edit "$number" --repo "$repo" --add-label "broken-link/unfixable" 2>/dev/null || true
   fi
@@ -656,7 +671,7 @@ done < "$EXTERNAL_FILE"
 echo "External analyzed: $EXTERNAL_ANALYZED"
 echo "External re-verified (now valid): $EXTERNAL_REVERIFIED"
 
-# --- Step 7: Ambiguous items ---
+# --- Step 7: Ambiguous items for model ---
 AMBIG_COUNT=$(jq 'length' "$AMBIGUOUS_FILE")
 if [ "$AMBIG_COUNT" -gt 0 ]; then
   echo ""
@@ -665,10 +680,9 @@ if [ "$AMBIG_COUNT" -gt 0 ]; then
   jq -r '.[] | "  #\(.issue_number): \(.broken_url) (\(.reason), \(.candidates | length) candidates)"' "$AMBIGUOUS_FILE"
 fi
 
-# --- Summary ---
+# --- Step 8: Summary ---
 echo ""
 echo "=== Fixer Run $FIX_DATE Summary ==="
-echo "Org: $ORG"
 echo "Issues processed: $((PROCESSED + EXTERNAL_PROCESSED))"
 echo ""
 echo "Internal links:"

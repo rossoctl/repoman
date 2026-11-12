@@ -63,7 +63,7 @@ gh_with_backoff() {
 # "skip": only a hard 0 proves it is safe to comment.
 #
 # Usage:
-#   n=$(fixer_comment_count "kagenti/adk" 42 "$FIXER_SIGNATURE")
+#   n=$(fixer_comment_count "rossoctl/repoman" 42 "$FIXER_SIGNATURE")
 #   [ "$n" = "0" ] || echo "skip (already commented, or status unknown)"
 #
 # Args:

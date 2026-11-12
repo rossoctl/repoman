@@ -58,7 +58,8 @@ bash ../dep-bump-scanner/scripts/dep-bump-scanner.sh
 
 The fixer reads the local clones (needed for config PR creation) from the `repos_dir`
 configured in `~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh
-init-config --repos-dir <path>`). `repoman_config` loads that key and **overwrites
+init-config --repos-dir <path> --fork-owner <owner>`, both flags required;
+`--repos-dir` must already exist). `repoman_config` loads that key and **overwrites
 any `REPOS_DIR` in the environment**, so exporting it by hand has no effect — change
 the config value instead. A missing `config.json` fails loud with `ERROR: RepoMan
 config not found`. Clones must live at `<repos_dir>/<owner>/<name>` (the layout the

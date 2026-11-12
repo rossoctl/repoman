@@ -119,7 +119,8 @@ story. The current engine:
 
 - no longer accepts `--org` (scanners take `--dry-run` and `--issue-limit` only);
 - reads the repos directory from `~/.repoman/config.json:repos_dir` (set via
-  `repoman-setup.sh init-config --repos-dir`). `repoman_config` loads that key and
+  `repoman-setup.sh init-config --repos-dir <path> --fork-owner <owner>`, both flags
+  required). `repoman_config` loads that key and
   **overwrites any `REPOS_DIR` in the environment**, so an environment-only
   `export REPOS_DIR=` is inert; a missing `config.json` fails loud with
   `ERROR: RepoMan config not found`; and

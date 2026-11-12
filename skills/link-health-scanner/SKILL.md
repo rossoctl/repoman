@@ -50,7 +50,8 @@ setup first (and tell the user) rather than retrying.
 
 The scanner reads the local clones from the `repos_dir` configured in
 `~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh init-config
---repos-dir <path>`). `repoman_config` loads that key and **overwrites any `REPOS_DIR`
+--repos-dir <path> --fork-owner <owner>`, both flags required; `--repos-dir` must
+already exist). `repoman_config` loads that key and **overwrites any `REPOS_DIR`
 in the environment**, so exporting `REPOS_DIR` by hand has no effect — change the
 config value instead. If `config.json` is missing, the scanner exits with
 `ERROR: RepoMan config not found` before anything else.
@@ -62,7 +63,7 @@ repos with no error). **Always ask the user for confirmation before cloning repo
 
 ### 4. Confirm report location
 
-Reports are saved to `REPORTS_DIR` (default: `./reports`). **Tell the user where reports will be saved before running.**
+Reports are saved to `REPORTS_DIR` (default: `$HOME/reports/link-health`). **Tell the user where reports will be saved before running.**
 
 ## Running the Scanner
 

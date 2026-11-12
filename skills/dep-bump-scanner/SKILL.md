@@ -48,7 +48,8 @@ setup first (and tell the user) rather than retrying.
 
 The scanner reads the local clones (needed for ecosystem detection — which manifest
 files exist) from the `repos_dir` configured in `~/.repoman/config.json` (set by
-`/repoman` setup or `repoman-setup.sh init-config --repos-dir <path>`).
+`/repoman` setup or `repoman-setup.sh init-config --repos-dir <path> --fork-owner <owner>`,
+both flags required; `--repos-dir` must already exist).
 `repoman_config` loads that key and **overwrites any `REPOS_DIR` in the
 environment**, so exporting it by hand has no effect — change the config value
 instead. A missing `config.json` fails loud with `ERROR: RepoMan config not found`.
@@ -60,7 +61,7 @@ repos with no error).
 
 ### 4. Confirm report location
 
-Reports default to `./reports/dep-bump`. Override with:
+Reports default to `$HOME/reports/dep-bump`. Override with:
 
 ```bash
 export REPORTS_DIR=~/reports/dep-bump

@@ -46,11 +46,20 @@ you can install just one without the full `repoman` bundle or its setup:
 /plugin install github-pr-review@rossoctl-repoman
 ```
 
-Swap `github-pr-review` for any program name from the [Programs](#programs) table
-(`link-health`, `dep-bump`, `repo-sync`, …). This is the right choice for a one-off,
+Swap `github-pr-review` for the plugin id of any program — run `/plugin` after adding
+the marketplace to see the authoritative list. The ids mostly match the
+[Programs](#programs) table, except the GitHub-facing ones carry the `github-` prefix:
+`github-pr-review` and `github-weekly-report` (the table lists them as `pr-review` and
+`weekly-report`). Installing a single program is the right choice for a one-off,
 chat-driven run (for example reviewing a single PR) or for calling an RM program from an
-external script, where the entrypoint and multi-repo enrollment aren't needed. Run
-`/plugin` after adding the marketplace to browse the authoritative list.
+external script, where the `/repoman` entrypoint isn't needed.
+
+Installing a single program skips the `/repoman` entrypoint, but most programs still
+need their own inputs at run time: `github-pr-review` and `github-weekly-report` act on
+a repo you name directly, while `link-health`, `dep-bump`, `repo-sync`, and
+`automation-health` read the enrolled set from `~/.repoman/repos.json` and
+`~/.repoman/config.json` (created by `repoman-setup.sh`) and fail loud without them.
+Each program's `SKILL.md` lists its prerequisites.
 
 ## Programs
 
@@ -68,9 +77,11 @@ The `repoman` bundle ships these programs, each ready to enable:
 | [doc-drift](skills/doc-drift-scanner/) | Scan repos for documentation drift and draft changelog notes from merged PRs ([fixer](skills/doc-drift-fixer/) re-verifies and opens mechanical doc fix PRs) |
 
 Every program also works as a **standalone skill** — usable on its own, without the
-`/repoman` entrypoint or multi-repo enrollment. This supports LLM chat-based one-off
-runs of a single program (for example a one-off PR review) and scriptable RM program
-calls from external tooling. See
+`/repoman` entrypoint. This supports LLM chat-based one-off runs of a single program
+(for example a one-off PR review) and scriptable RM program calls from external
+tooling. (The `link-health`, `dep-bump`, `repo-sync`, and `automation-health` programs
+still read their enrolled repo set from `~/.repoman/` even when run standalone, and fail
+loud without it — see each program's `SKILL.md`.) See
 [A single program (standalone skill)](#a-single-program-standalone-skill) for how to
 install one.
 

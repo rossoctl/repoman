@@ -52,7 +52,8 @@ setup first (and tell the user) rather than retrying.
 
 The fixer reads the local clones from the `repos_dir` configured in
 `~/.repoman/config.json` (set by `/repoman` setup or `repoman-setup.sh init-config
---repos-dir <path>`), same as the scanner. `repoman_config` loads that key and
+--repos-dir <path> --fork-owner <owner>`, both flags required; `--repos-dir` must
+already exist), same as the scanner. `repoman_config` loads that key and
 **overwrites any `REPOS_DIR` in the environment**, so exporting it by hand has no
 effect — change the config value instead. A missing `config.json` fails loud with
 `ERROR: RepoMan config not found`.
@@ -62,7 +63,7 @@ repo cloned flat at `<repos_dir>/<name>` is skipped silently.
 
 ### 4. Confirm report location
 
-Reports (including `fixer-ambiguous.json`) are saved to `$REPORTS_DIR` (default: `./reports`). **Tell the user where reports will be saved before running.**
+Reports (including `fixer-ambiguous.json`) are saved to `$REPORTS_DIR` (default: `$HOME/reports/link-health`). **Tell the user where reports will be saved before running.**
 
 ## Running the Fixer
 

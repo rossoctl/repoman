@@ -36,6 +36,22 @@ Refresh the marketplace and update the plugin (a Claude Code restart applies upd
 Updating `repoman` refreshes the bundled engine too, so engine fixes reach every user
 through a single plugin update.
 
+### A single program (standalone skill)
+
+Each program is also published as its own standalone plugin in the same marketplace, so
+you can install just one without the full `repoman` bundle or its setup:
+
+```
+/plugin marketplace add rossoctl/repoman
+/plugin install github-pr-review@rossoctl-repoman
+```
+
+Swap `github-pr-review` for any program name from the [Programs](#programs) table
+(`link-health`, `dep-bump`, `repo-sync`, …). This is the right choice for a one-off,
+chat-driven run (for example reviewing a single PR) or for calling an RM program from an
+external script, where the entrypoint and multi-repo enrollment aren't needed. Run
+`/plugin` after adding the marketplace to browse the authoritative list.
+
 ## Programs
 
 The `repoman` bundle ships these programs, each ready to enable:
@@ -51,9 +67,12 @@ The `repoman` bundle ships these programs, each ready to enable:
 | [weekly-report](skills/github-weekly-report/) | Weekly org activity reports with merged PRs, CI health, and active-epic tracking |
 | [doc-drift](skills/doc-drift-scanner/) | Scan repos for documentation drift and draft changelog notes from merged PRs ([fixer](skills/doc-drift-fixer/) re-verifies and opens mechanical doc fix PRs) |
 
-Each program is also published as its own standalone plugin, for using one on its own
-(for example a one-off PR review) without the full RepoMan setup. Run `/plugin` after
-adding the marketplace to browse the authoritative list.
+Every program also works as a **standalone skill** — usable on its own, without the
+`/repoman` entrypoint or multi-repo enrollment. This supports LLM chat-based one-off
+runs of a single program (for example a one-off PR review) and scriptable RM program
+calls from external tooling. See
+[A single program (standalone skill)](#a-single-program-standalone-skill) for how to
+install one.
 
 ## Prerequisites
 

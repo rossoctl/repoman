@@ -31,10 +31,11 @@ Scan all repositories in a GitHub organization for broken links. Creates GitHub 
 - Opt-in fallback: `LINK_CHECKER=lychee` (requires `lychee` >= 0.23.0 on PATH;
   do not pass `--include-verbatim` — the scanner relies on excluding URLs
   inside code blocks, which the python checker does by default too).
-- **Unchecked (egress refusals):** links the egress proxy refused to fetch are
-  reported with status `unchecked`, not broken. No issue is opened for them,
-  and a previously broken link that comes back unchecked is never auto-closed.
-  Widen the egress allowlist to turn them into real results.
+- **Unchecked (egress refusals):** When running under an egress proxy, links
+  that the proxy refused to fetch are reported with status `unchecked`, not
+  broken. No issue is opened for them, and a previously broken link that comes
+  back unchecked is never auto-closed. Widen the egress allowlist to turn them
+  into real results.
 - **Shadow mode:** set `LINK_HEALTH_SHADOW_OUT=<path>` to write a side report
   without touching the production baseline (it forces dry-run), e.g. to run a
   candidate checker side-by-side with the production one.

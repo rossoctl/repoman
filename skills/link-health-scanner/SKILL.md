@@ -1,7 +1,7 @@
 ---
 name: link-health-scanner
 description: >-
-  Scan all repos in a GitHub org for broken links using the stdlib Python
+  Scan an enrolled set of repos or all repos in a GitHub org for broken links using the stdlib Python
   link checker (no extra install), diff against previous results, create
   GitHub issues for new findings, close issues for fixed links, and write
   structured JSON reports. Egress-proxy refusals are reported as unchecked

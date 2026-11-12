@@ -206,6 +206,14 @@ elif [ -n "$SKILLS" ]; then
       prev_files=$(jq -r '.files[]? // empty' "$dest/_vendor.json" 2>/dev/null || true)
       while IFS= read -r pf; do
         [ -n "$pf" ] || continue
+        # Harden the prune's delete against a tampered/edited stamp: a .files
+        # entry must be a plain basename. A path component (or . / .. / the
+        # stamp itself) would let `rm "$dest/$pf"` escape the skill dir. _vendor.json
+        # is a committed file any PR can edit, so refuse rather than trust it.
+        case "$pf" in
+          */*|.|..|_vendor.json)
+            echo "ERROR: refusing to prune non-basename stamp entry: $pf" >&2; exit 1 ;;
+        esac
         case "$intended" in
           "$pf"|"$pf"$'\n'*|*$'\n'"$pf"|*$'\n'"$pf"$'\n'*) ;;   # still listed -> keep
           *) if [ -e "$dest/$pf" ] && ! rm "$dest/$pf"; then

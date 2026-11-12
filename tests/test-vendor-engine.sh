@@ -175,6 +175,17 @@ if [ -f "$pd/dep-bump-scanner.sh" ] && [ -f "$pd/_vendor.json" ]; then
 else echo "FAIL: prune removed a kept file"; fail=1; fi
 rm -f "$pd/my-helper.sh"   # don't let it perturb later assertions on this dir
 
+# A tampered stamp whose .files entry escapes the skill dir must be refused, not
+# obeyed: the prune's rm would otherwise delete outside $dest (path traversal).
+canary="$SK/CANARY-do-not-delete"
+echo "canary" > "$canary"
+tmpj=$(jq '.files += ["../../CANARY-do-not-delete"]' "$pd/_vendor.json") && printf '%s\n' "$tmpj" > "$pd/_vendor.json"
+if bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1; then
+  echo "FAIL: --skills accepted a non-basename stamp entry"; fail=1
+else echo "PASS: --skills refuses a non-basename stamp entry"; fi
+if [ -f "$canary" ]; then echo "PASS: path-traversal prune did not escape the skill dir"; else echo "FAIL: prune deleted a file outside the skill dir"; fail=1; fi
+rm -f "$canary"
+
 # --- --skills: a source missing for ONE skill fails loud, NO dir half-vendored ---
 BAD2="$TMP/bad2"; mkdir -p "$BAD2/scripts"
 # shellcheck disable=SC2086

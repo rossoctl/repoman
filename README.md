@@ -39,7 +39,7 @@ through a single plugin update.
 ### A single program (standalone skill)
 
 Each program is also published as its own standalone plugin in the same marketplace, so
-you can install just one without the full `repoman` bundle or its setup:
+you can install just one without the full `repoman` bundle or its `/repoman` entrypoint:
 
 ```
 /plugin marketplace add rossoctl/repoman

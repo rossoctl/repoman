@@ -152,18 +152,28 @@ bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
 sk_got2=$(jq -r '.source_sha' "$SK/dep-bump-scanner/scripts/_vendor.json" 2>/dev/null)
 if [ "$sk_got2" = "$sk_want" ]; then echo "PASS: --skills idempotent stamp sha"; else echo "FAIL: --skills idempotency $sk_got2 != $sk_want"; fail=1; fi
 
-# --skills prunes a previously-vendored file no longer in the manifest, so the
-# dir cannot drift from _vendor.json. Plant a stale script + a stale extra, then
-# re-vendor and assert both are gone while a manifest file and _vendor.json stay.
-echo "stale" > "$SK/dep-bump-scanner/scripts/old-dropped.sh"
-echo "stale" > "$SK/link-health-scanner/scripts/old-extra.py"
+# --skills prunes ONLY a file the tool previously vendored (listed in the old
+# _vendor.json .files) that the manifest no longer lists -- so the dir cannot
+# drift from the stamp -- but LEAVES a file the tool never wrote (a hand-added
+# helper), since the mode only removes paths it owns.
+pd="$SK/dep-bump-scanner/scripts"
+# (a) Simulate a previously-vendored-then-dropped file: add it to the stamp's
+#     .files AND to disk, as a prior run would have left it.
+echo "was vendored" > "$pd/old-vendored.sh"
+tmpj=$(jq '.files += ["old-vendored.sh"]' "$pd/_vendor.json") && printf '%s\n' "$tmpj" > "$pd/_vendor.json"
+# (b) A hand-added helper that was never vendored (absent from .files).
+echo "hand added" > "$pd/my-helper.sh"
 bash "$VENDOR" --source "$SRC" --skills "$SK" >/dev/null 2>&1
-if [ ! -e "$SK/dep-bump-scanner/scripts/old-dropped.sh" ] && [ ! -e "$SK/link-health-scanner/scripts/old-extra.py" ]; then
-  echo "PASS: --skills prunes stale vendored files"
-else echo "FAIL: --skills left a stale file behind"; fail=1; fi
-if [ -f "$SK/dep-bump-scanner/scripts/dep-bump-scanner.sh" ] && [ -f "$SK/dep-bump-scanner/scripts/_vendor.json" ]; then
+if [ ! -e "$pd/old-vendored.sh" ]; then
+  echo "PASS: --skills prunes a dropped previously-vendored file"
+else echo "FAIL: --skills left a dropped vendored file behind"; fail=1; fi
+if [ -f "$pd/my-helper.sh" ]; then
+  echo "PASS: --skills keeps a hand-added (never-vendored) file"
+else echo "FAIL: --skills deleted a file it never vendored"; fail=1; fi
+if [ -f "$pd/dep-bump-scanner.sh" ] && [ -f "$pd/_vendor.json" ]; then
   echo "PASS: prune keeps manifest files and _vendor.json"
 else echo "FAIL: prune removed a kept file"; fail=1; fi
+rm -f "$pd/my-helper.sh"   # don't let it perturb later assertions on this dir
 
 # --- --skills: a source missing for ONE skill fails loud, NO dir half-vendored ---
 BAD2="$TMP/bad2"; mkdir -p "$BAD2/scripts"

@@ -195,18 +195,25 @@ elif [ -n "$SKILLS" ]; then
     done
     # Trim trailing newline; this is the exact set the manifest produced.
     intended="${files_nl%$'\n'}"
-    # Prune any previously-vendored script this manifest no longer lists, so the
-    # dir cannot drift from _vendor.json (a dropped/renamed file would otherwise
-    # linger, still sourceable, defeating the "re-running reproduces the tree"
-    # guarantee). Only vendored script types are pruned; _vendor.json is kept.
-    for existing in "$dest"/*.sh "$dest"/*.py; do
-      [ -e "$existing" ] || continue   # globs that matched nothing
-      bn=$(basename "$existing")
-      case "$intended" in
-        "$bn"|"$bn"$'\n'*|*$'\n'"$bn"|*$'\n'"$bn"$'\n'*) ;;   # listed -> keep
-        *) if ! rm "$existing"; then echo "ERROR: could not prune stale $existing" >&2; exit 1; fi ;;
-      esac
-    done
+    # Prune only files THIS tool previously vendored (listed in the existing
+    # _vendor.json .files) that the current manifest no longer lists -- a
+    # dropped/renamed vendored file would otherwise linger, still sourceable,
+    # and drift the dir from the stamp. A file the tool never wrote (e.g. a
+    # helper someone hand-added) is NOT in the prior .files, so it is left
+    # alone: the mode still only removes paths it owns. Must read the old stamp
+    # before write_vendor_stamp overwrites it.
+    if [ -f "$dest/_vendor.json" ]; then
+      prev_files=$(jq -r '.files[]? // empty' "$dest/_vendor.json" 2>/dev/null || true)
+      while IFS= read -r pf; do
+        [ -n "$pf" ] || continue
+        case "$intended" in
+          "$pf"|"$pf"$'\n'*|*$'\n'"$pf"|*$'\n'"$pf"$'\n'*) ;;   # still listed -> keep
+          *) if [ -e "$dest/$pf" ] && ! rm "$dest/$pf"; then
+               echo "ERROR: could not prune stale $dest/$pf" >&2; exit 1
+             fi ;;
+        esac
+      done <<< "$prev_files"
+    fi
     write_vendor_stamp "$dest" "$intended" || exit 1
     echo "Resynced $skill_dir (source $SRC_SHA)"
   done

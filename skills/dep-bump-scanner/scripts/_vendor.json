@@ -1,7 +1,7 @@
 {
   "source_repo": "rossoctl/automation",
-  "source_sha": "c138e5f7a4fea6b8ba6bbb84558374f81cc6915f",
-  "vendored_at": "2026-11-10T21:03:00Z",
+  "source_sha": "4f284d0d65712fce2309b6f5911d481d5bc45351",
+  "vendored_at": "2026-11-12T21:18:30Z",
   "files": [
     "program-lib.sh",
     "core.sh",

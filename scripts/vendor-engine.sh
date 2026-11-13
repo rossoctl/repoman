@@ -60,7 +60,7 @@ pr-review-scanner program-lib repo-sync repoman-check repoman-index \
 repoman-requirements repoman-run repoman-setup weekly-report"
 
 # Non-shell engine files copied alongside the manifest (explicit, no glob).
-EXTRA_FILES="doc-drift-check.py"
+EXTRA_FILES="doc-drift-check.py link-check.py"
 
 # The six modular lib files every standalone skill dir needs. program-lib.sh is
 # the aggregator; it sources the other five siblings via $SCRIPT_DIR, so all six

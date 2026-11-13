@@ -2,9 +2,10 @@
 # Pure writer/validator for the three ~/.repoman file kinds RepoMan reads.
 #
 # Subcommands: init-config, add-repo, enable-program, set-output,
-# set-requirements. Each writes exactly one thing, validates it, and persists
-# atomically (temp file in the target directory, then `mv` into place, so a
-# crash mid-write never leaves a half-written JSON file).
+# set-requirements. Each writes
+# exactly one thing, validates it, and persists atomically (temp file in the
+# target directory, then `mv` into place, so a crash mid-write never leaves a
+# half-written JSON file).
 #
 # This script never calls gh, never prompts, never clones, never forks. It
 # receives already-resolved inputs (from the repoman-setup skill) and writes

@@ -421,16 +421,18 @@ probe inputs against both:
 BASE_SHA=$(gh pr view <number> --json baseRefOid --jq .baseRefOid)
 HEAD_SHA=$(gh pr view <number> --json headRefOid --jq .headRefOid)
 git fetch origin "$BASE_SHA" "$HEAD_SHA"
-git worktree add --detach "$LOG_DIR/base" "$BASE_SHA"
-git worktree add --detach "$LOG_DIR/head" "$HEAD_SHA"
 trap 'git worktree remove --force "$LOG_DIR/base" 2>/dev/null;
       git worktree remove --force "$LOG_DIR/head" 2>/dev/null;
       git worktree prune' EXIT
+git worktree add --detach "$LOG_DIR/base" "$BASE_SHA"
+git worktree add --detach "$LOG_DIR/head" "$HEAD_SHA"
 # Write one small probe (test or script), run it in both trees, diff the outputs.
 ```
 
-The `trap` removes the worktrees and prunes their registrations even when a
-probe fails — never leave detached checkouts behind.
+The `trap` is armed **before** the first `worktree add`, so a failing add
+cannot strand the other checkout, and it removes the worktrees and prunes
+their registrations even when a probe fails — never leave detached checkouts
+behind.
 
 Choose probes from what the diff touches:
 
@@ -445,9 +447,11 @@ Treat a behavior difference between base and head as a finding, stated as a
 concrete case. If base accepted an input and head now rejects it, or one bad
 element now fails a whole document, the user-visible behavior is wrong —
 **must-fix** — even when the spec allows the stricter behavior, because
-clients that don't follow the spec exist. Check the blast radius too: in
-protocols that resend history (chat-style APIs), one rejected message can
-break every later request in the conversation.
+clients that don't follow the spec exist. The one exception: when the stricter
+rejection is what the PR sets out to do, check it as the PR's central claim
+(§3.11) — confirm the blast radius (in protocols that resend history,
+chat-style APIs, one rejected message can break every later request in the
+conversation) and that the rejection is documented as intentional.
 
 #### Worked examples (§3.11, §3.12)
 

@@ -174,7 +174,7 @@ while IFS= read -r full_repo; do
   fi
 
   if [ "$LINK_CHECKER" = "python" ] && [ "$CHECKER_RC" -ne 0 ]; then
-    echo "  WARN: link-check.py exited $CHECKER_RC for $full_repo; stderr:"
+    echo "  WARN: link-check.py exited $CHECKER_RC for $full_repo; stderr:" >&2
     head -50 "$CHECK_STDERR" | sed 's/^/    /' >&2
     REPOS_FAILED=$((REPOS_FAILED + 1))
     printf '%s\n' "$full_repo" >> "$TMPDIR/failed_repos.txt"
@@ -182,7 +182,7 @@ while IFS= read -r full_repo; do
   fi
 
   if [ ! -s "$CHECK_OUTPUT" ]; then
-    echo "  WARN: $LINK_CHECKER produced no output for $full_repo; stderr:"
+    echo "  WARN: $LINK_CHECKER produced no output for $full_repo; stderr:" >&2
     head -50 "$CHECK_STDERR" | sed 's/^/    /' >&2
     REPOS_FAILED=$((REPOS_FAILED + 1))
     printf '%s\n' "$full_repo" >> "$TMPDIR/failed_repos.txt"
@@ -192,7 +192,7 @@ while IFS= read -r full_repo; do
   # Truncated output (a crash mid-write) must not kill the whole scanner via
   # set -e on the jq reads below; treat it as a failed repo instead.
   if ! jq empty "$CHECK_OUTPUT" >/dev/null 2>&1; then
-    echo "  WARN: $LINK_CHECKER emitted invalid JSON for $full_repo; stderr:"
+    echo "  WARN: $LINK_CHECKER emitted invalid JSON for $full_repo; stderr:" >&2
     head -50 "$CHECK_STDERR" | sed 's/^/    /' >&2
     REPOS_FAILED=$((REPOS_FAILED + 1))
     printf '%s\n' "$full_repo" >> "$TMPDIR/failed_repos.txt"

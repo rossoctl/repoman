@@ -14,8 +14,8 @@ source "$SCRIPT_DIR/program-lib.sh"
 REPORTS_DIR="${REPORTS_DIR:-$HOME/reports/link-health}"
 
 # Provenance footer for fix-PR bodies. Resolved once at startup: the helper
-# lazily writes _meta.<skill>.json beside this skill and returns the pinned-SHA RepoMan
-# attribution (blob/main fallback when the SHA cannot be resolved).
+# lazily writes _meta.<skill>.json beside this skill and returns the pinned-SHA
+# attribution (linkless fallback when the SHA cannot be resolved).
 SKILL_FOOTER=$(skill_attribution "link-health-fixer")
 
 FIX_DATE=$(date +%Y-%m-%d)

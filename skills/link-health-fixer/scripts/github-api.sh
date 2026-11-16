@@ -63,11 +63,11 @@ gh_with_backoff() {
 # "skip": only a hard 0 proves it is safe to comment.
 #
 # Usage:
-#   n=$(fixer_comment_count "kagenti/adk" 42 "$FIXER_SIGNATURE")
+#   n=$(fixer_comment_count "rossoctl/repoman" 42 "$FIXER_SIGNATURE")
 #   [ "$n" = "0" ] || echo "skip (already commented, or status unknown)"
 #
 # Args:
-#   $1 - full repo name (e.g., "kagenti/adk")
+#   $1 - full repo name (e.g., "rossoctl/repoman")
 #   $2 - PR number
 #   $3 - jq regex matched against each comment body (test())
 # Prints: the match count (>=0), or -1 if the fetch/parse failed
@@ -298,9 +298,37 @@ resolve_skill_meta() {
 
   # Resolve the pinned SHA from the canonical source repo's history for this
   # skill's path. Failure here is non-fatal and leaves the meta file absent.
+  #
+  # gh's stderr is captured (not discarded with 2>/dev/null) and its exit code
+  # checked, so the failure CLASS is distinguishable: an HTTP 401/403/404 that
+  # is not a rate limit means the token lacks access to the source repo
+  # (permanent for this PAT -- retrying will not help), while anything else
+  # (network blip, secondary rate limit) is transient and retries next run.
+  # Both classes stay non-fatal: provenance never affects the scan/fix rc.
+  local gh_rc=0 gh_err_file
+  gh_err_file=$(mktemp "${TMPDIR:-/tmp}/skill-meta-gh.XXXXXX")
   sha=$(gh api \
     "repos/$SKILL_SOURCE_REPO/commits?path=skills/$skill_name&per_page=1" \
-    --jq '.[0].sha' 2>/dev/null)
+    --jq '.[0].sha' 2>"$gh_err_file") || gh_rc=$?
+  if [ "$gh_rc" -ne 0 ]; then
+    # gh has no stable machine-readable error code yet (GH_ERROR_FORMAT=json
+    # is only a design: https://github.com/cli/cli/issues/14038), so the class
+    # is read from gh's human stderr. `HTTP 40[134]` matches both the older
+    # "HTTP 403: ..." lines and gh 2.89's "gh: <message> (HTTP 403)" lines;
+    # "rate limit" anywhere in the text keeps that 403 transient. Branch 7 of
+    # tests/test-skill-meta.sh pins both shapes, so a gh reword fails the
+    # test instead of silently flipping a permission failure to transient.
+    if grep -qE 'HTTP 40[134]' "$gh_err_file" && ! grep -qi 'rate limit' "$gh_err_file"; then
+      echo "WARN: provenance lookup for '$skill_name' was refused (gh exit $gh_rc; token likely lacks read access to $SKILL_SOURCE_REPO); using linkless attribution." >&2
+    else
+      echo "WARN: provenance lookup for '$skill_name' failed transiently (gh exit $gh_rc); using linkless attribution (will retry next run)." >&2
+    fi
+    sed 's/^/    /' "$gh_err_file" >&2
+    rm -f "$gh_err_file"
+    printf ''
+    return 0
+  fi
+  rm -f "$gh_err_file"
 
   if [ -z "$sha" ] || [ "$sha" = "null" ]; then
     echo "WARN: could not resolve provenance SHA for skill '$skill_name'; using linkless attribution (will retry next run)." >&2

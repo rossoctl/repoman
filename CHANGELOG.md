@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **link-health: stdlib Python link checker as the default.** `LINK_CHECKER=python` (the new default) uses the vendored `link-check.py`, so link-health needs only `python3` >= 3.8, `gh`, `jq`, and `bash` — no lychee install — and runs on a basic agent image. Egress-proxy refusals are classified as `unchecked`: they never open or auto-close issues, and the run summary, `latest.json`, and the automation-health dashboard report the unchecked count and top hosts. `LINK_CHECKER=lychee` remains an opt-in fallback, and `LINK_HEALTH_SHADOW_OUT` runs a checker side-by-side in shadow mode. (#3)
+- **pr-review: claims check and head-vs-base probes.** Reviews now list every behavior a PR claims and verify each in its exact target case and sibling variants, requiring a new test to assert what the user sees. A claimed fix that does not hold, or input that base handled and head now rejects, is must-fix — severity follows user-visible behavior, not a comparison with `main`. §3.12 adds opportunistic head-vs-base probes that run only with tooling already on `PATH` (never installed mid-review), and every review summary carries an auditable `Not checked:` list. Mirrors `rossoctl/agent-skills#53`.
+
+### Changed
+
+- Bundled engine is vendored from `rossoctl/automation` `ef8a26f` — the `feat/stdlib-link-checker` line merged as automation#123, plus #141–#143. It carries the link-health scanner, extractor, and automation-health dashboard updates; doc-drift and PR-review fixes from automation `main`; and `link-check.py` joining the vendored set (`scripts/vendor-engine.sh` extras). The plugin dir and all four standalone skill dirs ship the same engine version.
+- `github-api.sh` provenance lookups capture `gh` stderr and distinguish a refused token (lacks read access to the skill source repo) from a transient failure. Both remain non-fatal; transient failures retry on the next run.
+
+### Fixed
+
+- link-health: plain-`http` egress refusals (gateway/portal responses) are classified `unchecked` instead of broken, and public-to-private redirects are excluded under `--exclude-all-private`, matching lychee's behavior.
+- link-health scanner `WARN:` diagnostics from `link-check.py` now go to stderr, keeping the stdout report machine-readable.
+
 ## [0.1.1] - 2026-11-05
 
 ### Added

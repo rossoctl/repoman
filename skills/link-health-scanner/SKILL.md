@@ -1,10 +1,12 @@
 ---
 name: link-health-scanner
 description: >-
-  Scan all repos in a GitHub org for broken links using lychee, diff against
-  previous results, create GitHub issues for new findings, close issues for
-  fixed links, and write structured JSON reports. Use when you need to audit
-  link health across an organization's repositories.
+  Scan an enrolled set of repos or all repos in a GitHub org for broken links using the stdlib Python
+  link checker (no extra install), diff against previous results, create
+  GitHub issues for new findings, close issues for fixed links, and write
+  structured JSON reports. Egress-proxy refusals are reported as unchecked
+  and never open or auto-close issues. Use when you need to audit link
+  health across an organization's repositories.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -17,10 +19,29 @@ Scan all repositories in a GitHub organization for broken links. Creates GitHub 
 ## Prerequisites
 
 - `bash` 3.2+ (works with the macOS system default; no bash-4 features used)
-- `lychee` >= 0.23.0 (link checker: `brew install lychee`) — the scanner relies on
-  lychee's default exclusion of URLs inside code blocks; do not pass `--include-verbatim`
+- `python3` >= 3.8 (the default link checker, `scripts/link-check.py`, is stdlib-only:
+  `urllib`, `concurrent.futures`, `html.parser`, `re` — nothing to install)
 - `gh` (GitHub CLI, authenticated with org access)
 - `jq` (JSON processor)
+
+### Link checker
+
+- Default: `LINK_CHECKER=python` — the stdlib checker, so the program runs on a
+  basic agent image with no lychee install.
+- Opt-in fallback: `LINK_CHECKER=lychee` (requires `lychee` >= 0.23.0 on PATH;
+  do not pass `--include-verbatim` — the scanner relies on excluding URLs
+  inside code blocks, which the python checker does by default too).
+- **Unchecked (egress refusals):** When running under an egress proxy, links
+  that the proxy refused to fetch are reported with status `unchecked`, not
+  broken. No issue is opened for them, and a previously broken link that comes
+  back unchecked is never auto-closed. Widen the egress allowlist to turn them
+  into real results.
+- **Shadow mode:** set `LINK_HEALTH_SHADOW_OUT=<path>` to write a side report
+  without touching the production baseline (it forces dry-run), e.g. to run a
+  candidate checker side-by-side with the production one.
+- Per-repo `.lychee.toml` is honored when present; the python checker implements
+  the `exclude`, `exclude_path`, and `accept` keys (including ranges like
+  `"200..=204"`) and warns about and ignores any other key.
 
 ### Requirements (machine-readable)
 
@@ -88,11 +109,13 @@ Use `--issue-limit` to cap issue creation, especially on first runs.
 The scanner prints:
 - Repos scanned and any failures
 - Total links checked and broken link count (internal vs external)
+- Unchecked count (egress refusals) and, when non-zero, the top unchecked hosts
 - Delta: new broken links since last scan, fixed links, recurring
 - Issues created/closed
 
 Reports written:
-- `$REPORTS_DIR/latest.json` -- full scan results
+- `$REPORTS_DIR/latest.json` -- full scan results (including `unchecked_count`
+  and `unchecked_top_hosts`)
 - `$REPORTS_DIR/history.json` -- append-only trend data
 
 ## Safety

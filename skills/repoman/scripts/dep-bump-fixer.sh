@@ -70,16 +70,18 @@ SCAN_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 MAX_HISTORY_ROWS=500
 # Provenance footer appended to every fixer comment/issue. Resolved once at
 # startup: the helper lazily writes _meta.<skill>.json beside this skill and returns the
-# pinned-SHA RepoMan attribution (blob/main fallback when unresolved).
+# pinned-SHA attribution (linkless fallback when unresolved).
 SKILL_FOOTER=$(skill_attribution "dep-bump-fixer")
-# Stable dedup key: the substring every footer form shares, regardless of the
-# per-run SHA (both "...RepoMan dep-bump-fixer@<sha>..." and the blob/main
-# fallback contain it). The dedup search (below) looks for THIS, not the whole
-# footer, so a changing SHA never defeats dedup. Comments carrying the former
-# marker value are no longer recognized, so an already-analyzed PR may receive
-# one duplicate comment on the next run after the marker changed — acceptable,
-# one-time.
-FIXER_SIGNATURE="RepoMan dep-bump-fixer"
+# Stable dedup key: a regex (jq `test`, below) anchored to the footer so it
+# matches a fixer comment but not a human comment that merely mentions the tool.
+# It matches all three footer forms, regardless of the per-run SHA: the resolved
+# footer ("...by repoman [dep-bump-fixer@<sha>](...)"), the linkless fallback
+# ("...by repoman dep-bump-fixer."), and the legacy "...by RepoMan dep-bump-fixer@"
+# form (so comments posted before the format flip keep deduping). A bare mention
+# like "dep-bump-fixer skipped this one" or a link to skills/dep-bump-fixer/ is
+# NOT anchored to "by (repoman|RepoMan)", so it never false-positives into
+# suppressing analysis.
+FIXER_SIGNATURE="by (repoman \[?|RepoMan )dep-bump-fixer"
 
 # --- Workspace setup ---
 setup_workspace "dep-bump-fixer"
@@ -257,16 +259,19 @@ while IFS= read -r issue_record; do
     continue
   fi
 
-  # Check if fixer already commented on this PR
-  # $sig below is a jq variable passed via --arg, not a shell expansion
-  # shellcheck disable=SC2016
-  already_commented=$(gh_with_backoff pr view "$pr_number" --repo "$issue_repo" \
-    --json comments --jq --arg sig "$FIXER_SIGNATURE" \
-    '[.comments[] | select(.body | contains($sig))] | length' 2>/dev/null || echo "0")
+  # Check if fixer already commented on this PR. The signature is a regex bound
+  # via a real jq --arg inside the helper — `gh pr view --jq` cannot take --arg.
+  # The helper returns -1 (UNKNOWN) when the fetch fails; skip on anything but a
+  # hard 0 so a transient error never re-posts a duplicate comment.
+  already_commented=$(fixer_comment_count "$issue_repo" "$pr_number" "$FIXER_SIGNATURE")
 
-  if [ "$already_commented" -gt 0 ]; then
+  if [ "$already_commented" != "0" ]; then
     if [ "$VERBOSE" = true ]; then
-      echo "    Already commented, skipping"
+      if [ "$already_commented" = "-1" ]; then
+        echo "    Comment-status check failed, skipping to avoid a duplicate"
+      else
+        echo "    Already commented, skipping"
+      fi
     fi
     SKIPPED_ALREADY_COMMENTED=$((SKIPPED_ALREADY_COMMENTED + 1))
     continue

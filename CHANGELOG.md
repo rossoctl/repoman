@@ -4,15 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.2] - 2026-11-24
 
 ### Added
 
 - **link-health: stdlib Python link checker as the default.** `LINK_CHECKER=python` (the new default) uses the vendored `link-check.py`, so link-health needs only `python3` >= 3.8, `gh`, `jq`, and `bash` — no lychee install — and runs on a basic agent image. Egress-proxy refusals are classified as `unchecked`: they never open or auto-close issues, and the run summary, `latest.json`, and the automation-health dashboard report the unchecked count and top hosts. `LINK_CHECKER=lychee` remains an opt-in fallback, and `LINK_HEALTH_SHADOW_OUT` runs a checker side-by-side in shadow mode. (#3)
 - **pr-review: claims check and head-vs-base probes.** Reviews now list every behavior a PR claims and verify each in its exact target case and sibling variants, requiring a new test to assert what the user sees. A claimed fix that does not hold, or input that base handled and head now rejects, is must-fix — severity follows user-visible behavior, not a comparison with `main`. §3.12 adds opportunistic head-vs-base probes that run only with tooling already on `PATH` (never installed mid-review), and every review summary carries an auditable `Not checked:` list. Mirrors `rossoctl/agent-skills#53`.
+- **pr-review: re-review mode and length caps.** One review per head SHA: re-reviews check earlier findings first, look for new issues only in the increment, cap findings on unchanged code at nit, own any reversal of earlier advice, and stop once clean (still subject to the APPROVE gates). Resolved review threads are closed and not raised again, and the `.claude/` supply-chain must-fix is raised once per file version. An `ai-review-final` label limits the round to a status check of earlier findings. Docs-only PRs get a light review without the §3.11 audit or §3.12 probes. Reviews carry no greetings or personas, at most 10 inline comments, and capped summary lengths. Mirrors `rossoctl/agent-skills#60`.
 
 ### Changed
 
+- Marketplace version is `0.1.2`. The `v0.1.2` tag is cut from `main` after this release merges.
 - Bundled engine is vendored from `rossoctl/automation` `ef8a26f` — the `feat/stdlib-link-checker` line merged as automation#123, plus #141–#143. It carries the link-health scanner, extractor, and automation-health dashboard updates; doc-drift and PR-review fixes from automation `main`; and `link-check.py` joining the vendored set (`scripts/vendor-engine.sh` extras). The plugin dir and all four standalone skill dirs ship the same engine version.
 - `github-api.sh` provenance lookups capture `gh` stderr and distinguish a refused token (lacks read access to the skill source repo) from a transient failure. Both remain non-fatal; transient failures retry on the next run.
 
@@ -72,5 +74,6 @@ enabling a program, or running one.
 
 Gloire Rubambiza, Aleksander Slominski, Mariusz Sabath, Jim Cadden.
 
+[0.1.2]: https://github.com/rossoctl/repoman/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rossoctl/repoman/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rossoctl/repoman/releases/tag/v0.1.0

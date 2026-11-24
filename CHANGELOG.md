@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.2] - 2026-11-24
 
 ### Added
 
@@ -14,6 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Marketplace version is `0.1.2`. The `v0.1.2` tag is cut from `main` after this release merges.
 - Bundled engine is vendored from `rossoctl/automation` `ef8a26f` — the `feat/stdlib-link-checker` line merged as automation#123, plus #141–#143. It carries the link-health scanner, extractor, and automation-health dashboard updates; doc-drift and PR-review fixes from automation `main`; and `link-check.py` joining the vendored set (`scripts/vendor-engine.sh` extras). The plugin dir and all four standalone skill dirs ship the same engine version.
 - `github-api.sh` provenance lookups capture `gh` stderr and distinguish a refused token (lacks read access to the skill source repo) from a transient failure. Both remain non-fatal; transient failures retry on the next run.
 
@@ -73,5 +74,6 @@ enabling a program, or running one.
 
 Gloire Rubambiza, Aleksander Slominski, Mariusz Sabath, Jim Cadden.
 
+[0.1.2]: https://github.com/rossoctl/repoman/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rossoctl/repoman/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rossoctl/repoman/releases/tag/v0.1.0

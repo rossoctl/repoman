@@ -64,6 +64,7 @@ export REPO=<repo-name>
 - [Context-Safe Execution](#context-safe-execution-mandatory)
 - [Phase 1: Gather PR Data](#phase-1-gather-pr-data)
   - [1.6 Author Trust Level](#16-author-trust-level)
+  - [1.7 Prior Reviews (re-review mode)](#17-prior-reviews-re-review-mode)
 - [Phase 2: Analyze Changes](#phase-2-analyze-changes)
 - [Phase 3: Review Checklist](#phase-3-review-checklist)
 - [Phase 4: Draft Review](#phase-4-draft-review)
@@ -171,6 +172,53 @@ For **elevated** or **highest** scrutiny:
 
 Record the author and trust level — it appears in the Phase 4 summary (§4.2) and
 drives the verdict (§4.3).
+
+### 1.7 Prior Reviews (re-review mode)
+
+Before analyzing, check whether you have already reviewed this PR:
+
+```bash
+ME=$(gh api user --jq .login)
+gh api repos/{owner}/{repo}/pulls/<number>/reviews --paginate \
+  --jq "[.[] | select(.user.login==\"$ME\")] | last | {commit_id, state, submitted_at}"
+```
+
+- **Same head SHA already reviewed** → stop. Do not post a second review on
+  the same commit.
+- **An earlier head SHA was reviewed** → this is a **re-review**. Save the
+  increment and your earlier findings, then follow the re-review rules in §4.5:
+
+```bash
+LAST_SHA=<commit_id from above>
+gh api repos/{owner}/{repo}/compare/$LAST_SHA...<head-sha> \
+  --jq '.files[] | .patch // empty' > $LOG_DIR/pr-<number>-increment.diff
+gh api repos/{owner}/{repo}/pulls/<number>/comments --paginate \
+  --jq ".[] | select(.user.login==\"$ME\") | {path, line, body}" > $LOG_DIR/pr-<number>-my-comments.json
+```
+
+  Also fetch the review threads' resolution state. It is only available over
+  GraphQL:
+
+```bash
+gh api graphql -F owner={owner} -F repo={repo} -F pr=<number> -f query='
+  query($owner:String!,$repo:String!,$pr:Int!){
+    repository(owner:$owner,name:$repo){ pullRequest(number:$pr){
+      reviewThreads(first:100){ nodes{ isResolved isOutdated path line
+        comments(first:20){ nodes{ author{login} body } } } } } } }' \
+  > $LOG_DIR/pr-<number>-threads.json
+```
+
+  A **resolved** thread is closed: do not raise its point again, at any
+  severity, unless the increment changes those lines and breaks them anew. If
+  the author replied in a thread and disagreed, read the reply before
+  repeating the finding. Repeat it only with new evidence, and as a
+  **suggestion** at most, unless it is a security issue.
+- **No earlier review** → full review as below.
+
+**Round cap label.** If the PR carries the `ai-review-final` label, this is the
+last automated round. Only report the status of earlier findings (§4.5 rule
+1). Raise no new findings except security issues, and do not review again
+after this round, even on new pushes.
 
 ## Phase 2: Analyze Changes
 
@@ -295,6 +343,13 @@ grep -nE '^\+\+\+ b/(.*/)?\.(claude|vscode)/|^rename to (.*/)?\.(claude|vscode)/
 3. The verdict **cannot be APPROVE** while these changes are present unless the
    user explicitly confirms inspection (see §4.3 and §4.4).
 
+**Raise it once per file version.** On a re-review (§1.7), re-raise the
+supply-chain must-fix only for `.claude/`/`.vscode/` files that changed in the
+increment. If a flagged file is unchanged since your last review, do not post
+a new must-fix for it. Write `previously flagged at <sha>, unchanged` on the
+summary's Agent/IDE config line and leave it out of the must-fix count. The
+"cannot be APPROVE" rule above still applies.
+
 > 🚨 **CONFIRMED MALWARE — STOP IMMEDIATELY** 🚨
 >
 > If a `.claude/settings.json` in the diff contains
@@ -349,6 +404,24 @@ If the PR touches `.yaml`/`.yml` files:
 | Updated | User-facing changes have docs/README updates |
 | Accurate | Docs match the actual behavior |
 
+**Docs-only PRs** (every changed file is Markdown, other prose, or a static
+docs page) get a light review:
+
+| Check | What |
+|-------|------|
+| Links | Changed links and anchors resolve |
+| Checkable facts | Paths, commands, flags, versions, config values and repo/issue states named in the changed text match the repo or GitHub — one lookup each |
+| Obvious errors | Wrong numbers, contradictions within the same page, broken formatting |
+
+Skip §3.11's line-by-line claims audit and §3.12's probes for docs-only PRs.
+The skip covers the audit and the probes only — §3.12's concrete-case rule
+still applies, and for a docs finding the case is the specific wrong line or
+fact: quote the line, state the correct value. Do not build simulations or
+models to test the docs' explanations. If an explanation looks wrong but
+checking it would take more than a lookup, raise it at most once, as a
+**suggestion**, and leave it to the human reviewer. Prose style, wording, and
+how the docs explain a concept are at most **nits**.
+
 ### 3.10 Feature Gate / Dual-Mode Code
 
 If the PR introduces two code paths behind a feature gate (e.g. `legacy` vs `resolved`,
@@ -376,7 +449,8 @@ CM-A, but existing deployments have it in CM-B).
 
 ### 3.11 Claims Check
 
-Always check for PRs that change code behavior:
+Always check for PRs that change code behavior. Skip it for docs-only PRs
+(§3.9):
 
 | Check | What |
 |-------|------|
@@ -496,7 +570,15 @@ Severity levels:
 
 Do NOT include praise comments — they clutter the review without adding value.
 
+**Keep it short.** Findings only: no greetings, jokes, personas or restating
+what the PR does. Each inline comment is the problem, the concrete case, and
+a suggested fix — a few sentences, not an essay. Post at most 10 inline
+comments; past that, keep the must-fixes and the strongest suggestions and
+list the rest in one line of the summary.
+
 ### 4.2 Summary Comment
+
+Keep the summary under ~200 words, excluding the metadata lines below.
 
 ```markdown
 ### Summary
@@ -573,6 +655,33 @@ For a **first-time contributor**, make the warning the loudest item in the promp
 A confirmed-malware signature (§3.5a) never reaches this gate — it halts in §4.3
 step 1.
 
+### 4.5 Re-review Rules
+
+A re-review (§1.7) must **converge**: each round should leave fewer open
+items than the last, and a PR that fixes what was asked should not keep
+gaining new must-fixes.
+
+1. **Check earlier findings first.** For each must-fix and suggestion from
+   your previous review, say in one line whether it is fixed, partly fixed, or
+   still open. Fixed items get no further comment.
+2. **Review the increment, not the whole PR.** New findings come from lines
+   changed since `LAST_SHA` (`pr-<number>-increment.diff`). A new problem in
+   a line the increment changed can be any severity.
+3. **Unchanged code is capped at nit.** Something you notice in code or prose
+   that was already there at your last review was missed earlier, not
+   introduced. Report it as a **nit** at most, in the summary, never as a
+   must-fix — unless it is a security issue or confirmed broken functionality.
+4. **Don't contradict yourself.** If a new finding reverses advice you gave in
+   an earlier round (for example, the author applied your suggested wording
+   and now you call it wrong), say so explicitly, own the earlier mistake,
+   and do not grade the author's compliance as a defect above **suggestion**.
+5. **Stop when clean.** If every earlier must-fix is fixed and the increment
+   adds none, the verdict follows §4.3 with no must-fixes — subject to the
+   §4.3 gates, which still block APPROVE on an unresolved `.claude`/`.vscode`
+   change. Do not search the unchanged parts of the PR for more.
+6. **Stay shorter.** A re-review summary is the status list from rule 1 plus
+   any new increment findings, under ~120 words.
+
 ## Phase 5: Submit Review
 
 After user approves, post the review via GitHub API. End the review body and its Slack post with the exact line from `pr-review-fixer.sh footer`. Inline comments do not get one.
@@ -623,7 +732,9 @@ lines down from the first `@@` hunk header. Use `line` (as shown in §5.1) — n
 
 ### Review already exists
 
-GitHub allows multiple reviews. A new review will be added alongside existing ones.
+GitHub allows multiple reviews, so a new one is added alongside the old ones.
+Check §1.7 first: post at most one review per head SHA, and follow §4.5 when
+you have reviewed an earlier SHA.
 
 ### Large PRs (> 500 changed lines)
 

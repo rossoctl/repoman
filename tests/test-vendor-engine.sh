@@ -14,9 +14,9 @@ extract-broken-links fork github-api link-health-fixer link-health-scanner \
 org parse-diff-map pr-review-fixer pr-review-impact pr-review-lib \
 pr-review-scanner program-lib repo-sync repoman-check repoman-index \
 repoman-requirements repoman-run repoman-setup weekly-report"
-EXTRA_FILES="doc-drift-check.py"
+EXTRA_FILES="doc-drift-check.py link-check.py"
 EXPECTED_SH=26
-EXPECTED_FILES=27
+EXPECTED_FILES=28
 
 # Fake automation source repo holding the engine scripts, committed so it has a HEAD.
 SRC="$TMP/auto"; mkdir -p "$SRC/scripts"
@@ -36,6 +36,7 @@ fi
 n=$(find "$DEST" -maxdepth 1 -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
 if [ "$n" = "$EXPECTED_SH" ]; then echo "PASS: $EXPECTED_SH scripts copied"; else echo "FAIL: copied $n, expected $EXPECTED_SH"; fail=1; fi
 if [ -f "$DEST/doc-drift-check.py" ]; then echo "PASS: doc-drift-check.py copied"; else echo "FAIL: doc-drift-check.py missing"; fail=1; fi
+if [ -f "$DEST/link-check.py" ]; then echo "PASS: link-check.py copied"; else echo "FAIL: link-check.py missing"; fail=1; fi
 
 # --- Provenance stamp: correct SOURCE repo HEAD sha + file list ---
 want=$(git -C "$SRC" rev-parse HEAD)
@@ -47,6 +48,8 @@ if jq -e '.source_repo == "rossoctl/automation"' "$DEST/_vendor.json" >/dev/null
   echo "PASS: stamp names source repo"; else echo "FAIL: stamp source_repo wrong"; fail=1; fi
 if jq -e '.files | index("doc-drift-check.py")' "$DEST/_vendor.json" >/dev/null 2>&1; then
   echo "PASS: stamp lists doc-drift-check.py"; else echo "FAIL: stamp missing doc-drift-check.py"; fail=1; fi
+if jq -e '.files | index("link-check.py")' "$DEST/_vendor.json" >/dev/null 2>&1; then
+  echo "PASS: stamp lists link-check.py"; else echo "FAIL: stamp missing link-check.py"; fail=1; fi
 
 # --- Idempotency: second run, same source => identical stamp sha ---
 bash "$VENDOR" --source "$SRC" --dest "$DEST" >/dev/null 2>&1

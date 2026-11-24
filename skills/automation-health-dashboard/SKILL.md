@@ -86,7 +86,7 @@ bash scripts/automation-health-dashboard.sh --live --main-repo-dir /path/to/auto
 ## Dashboard Sections
 
 - **Executive Summary** — total issues created/resolved, PRs opened, estimated hours saved
-- **Link Health** — broken links by type, trend table, cumulative issues
+- **Link Health** — broken links by type, trend table, cumulative issues, unchecked (egress-refusal) count and top hosts
 - **Dependency Bumps** — stale PRs by tier, SLA compliance, median TTM, coverage
 - **Cross-Program Coverage** — which repos are under which programs
 - **Cron Health** — job schedules and last run status

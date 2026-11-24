@@ -291,6 +291,8 @@ LH_REPOS_SCANNED=0
 LH_TOTAL_LINKS=0
 LH_BROKEN_INTERNAL=0
 LH_BROKEN_EXTERNAL=0
+LH_UNCHECKED_COUNT=0
+LH_UNCHECKED_TOP_HOSTS="(none)"
 LH_FIRST_INTERNAL=0
 LH_FIRST_EXTERNAL=0
 LH_TREND_TABLE="| - | - | - | - |"
@@ -300,6 +302,13 @@ if [ "$HAS_LINK_HEALTH" = true ]; then
   LH_TOTAL_LINKS=$(jq '.total_links_checked // 0' "$LINK_SCAN_DIR/latest.json")
   LH_BROKEN_INTERNAL=$(jq '[.broken[] | select(.category == "internal")] | length' "$LINK_SCAN_DIR/latest.json" 2>/dev/null || echo "0")
   LH_BROKEN_EXTERNAL=$(jq '[.broken[] | select(.category == "external")] | length' "$LINK_SCAN_DIR/latest.json" 2>/dev/null || echo "0")
+  LH_UNCHECKED_COUNT=$(jq '.unchecked_count // 0' "$LINK_SCAN_DIR/latest.json" 2>/dev/null || echo "0")
+  LH_UNCHECKED_TOP_HOSTS=$(jq -r '
+    (.unchecked_top_hosts // []) as $h |
+    if ($h | length) == 0 then "(none)"
+    else ($h | map("\(.host) (\(.count))") | join(", "))
+    end
+  ' "$LINK_SCAN_DIR/latest.json" 2>/dev/null || echo "(none)")
 
   # First scan values for trend comparison
   LH_FIRST_INTERNAL=$(jq '.[0].broken_internal // 0' "$LINK_SCAN_DIR/history.json")
@@ -526,6 +535,8 @@ if [ "$HAS_LINK_HEALTH" = true ]; then
 | Total links checked | $LH_TOTAL_LINKS | |
 | Broken (internal) | $LH_BROKEN_INTERNAL | $lh_int_trend |
 | Broken (external) | $LH_BROKEN_EXTERNAL | $lh_ext_trend |
+| Unchecked (egress refusals) | $LH_UNCHECKED_COUNT | |
+| Unchecked top hosts | $LH_UNCHECKED_TOP_HOSTS | |
 | Issues created (cumulative) | $LH_ISSUES_CREATED | |
 | Issues resolved (cumulative) | $LH_ISSUES_CLOSED | |
 
